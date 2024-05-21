@@ -48,16 +48,12 @@ def draw_detections(image, detections):
 
 
 # 发送图像数据到服务器
-async def send_file(uri, frame, image_name, token):
+async def send_file(uri, image_data, image_name, token):
     try:
         start_time = time.time()  # 记录开始时间
         async with websockets.connect(
             uri, extra_headers={"Authorization": "Bearer " + token}
         ) as websocket:
-            # 将图像转换为灰度图像,这样理论上是压缩，但是识别精度下降
-            # gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            _, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-            image_data = buffer.tobytes()
             await websocket.send(base64.b64encode(image_data).decode())
             await websocket.send(f"END {image_name}")
             response = await websocket.recv()
@@ -68,11 +64,15 @@ async def send_file(uri, frame, image_name, token):
             if response != "[]":
                 # 解析响应并绘制检测结果到图像
                 detections = json.loads(response)
-                image_with_detections = draw_detections(frame, detections)
+                image = cv2.imdecode(np.frombuffer(image_data, np.uint8), cv2.IMREAD_COLOR)
+                image_with_detections = draw_detections(image, detections)
                 # 保存结果图像
-                result_path = os.path.join("restmp", image_name)
-                cv2.imwrite(result_path, image_with_detections)
-                print(f"结果图像已保存到: {result_path}")
+                result_path = os.path.join(".\client\restmp", image_name)
+                success = cv2.imwrite(result_path, image_with_detections)
+                if success:
+                    print(f"结果图像已保存到: {result_path}")
+                else:
+                    print(f"保存结果图像失败: {result_path} 报错：{cv2.error()}")
     except websockets.exceptions.ConnectionClosedError as e:
         print(f"连接已关闭: {e}")
     except Exception as e:
@@ -92,7 +92,9 @@ async def capture_and_send(uri, token):
         # 应用人脸模糊
         frame = blur_faces(frame)
         image_name = f"frame_{frame_count}.jpg"
-        await send_file(uri, frame, image_name, token)
+        _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        image_data = buffer.tobytes()
+        await send_file(uri, image_data, image_name, token)
     cap.release()
 
 
@@ -111,13 +113,15 @@ async def capture_and_send_from_video(uri, token, video_path):
             # 应用人脸模糊
             frame = blur_faces(frame)
             image_name = f"frame_{frame_count}.jpg"
-            await send_file(uri, frame, image_name, token)
+            _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            image_data = buffer.tobytes()
+            await send_file(uri, image_data, image_name, token)
     cap.release()
 
 
 if __name__ == "__main__":
     url = "ws://103.228.12.147:6789"
-    url = "ws://127.0.0.1:6789"
+    # url = "ws://127.0.0.1:6789"
     # 调用摄像头版
     # asyncio.run(capture_and_send(
     #     "ws://127.0.0.1:6789",
@@ -126,6 +130,6 @@ if __name__ == "__main__":
     # 调用本地当前目录test.mp4模拟版
     asyncio.run(
         capture_and_send_from_video(
-            url, "1234", "test.mp4"  # 确保这里的token与服务器端一致  # 视频文件路径
+            url, "1234", os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")+"/test.mp4"  # 确保这里的token与服务器端一致  # 视频文件路径
         )
     )
