@@ -67,7 +67,7 @@ async def send_file(uri, image_data, image_name, token):
                 image = cv2.imdecode(np.frombuffer(image_data, np.uint8), cv2.IMREAD_COLOR)
                 image_with_detections = draw_detections(image, detections)
                 # 保存结果图像
-                result_path = os.path.join(".\client\restmp", image_name)
+                result_path = os.path.join("./client/restmp", image_name)
                 success = cv2.imwrite(result_path, image_with_detections)
                 if success:
                     print(f"结果图像已保存到: {result_path}")
