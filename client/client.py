@@ -6,18 +6,21 @@ import base64
 import cv2
 import numpy as np
 import time
+from typing import List, Dict
 
 # 加载Haar级联分类器
 face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 )
-
+plate_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + "haarcascade_russian_plate_number.xml"
+)
 
 # 人脸模糊函数
-def blur_faces(image):
+def blur_faces(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
+        gray, scaleFactor=1.1, minNeighbors=5
     )
     for x, y, w, h in faces:
         roi = image[y : y + h, x : x + w]
@@ -25,9 +28,20 @@ def blur_faces(image):
         image[y : y + h, x : x + w] = roi
     return image
 
+# 车牌打码函数
+def blur_license_plates(image: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    plates = plate_cascade.detectMultiScale(
+        gray, scaleFactor=1.05, minNeighbors=5
+    )
+    for x, y, w, h in plates:
+        plate_region = image[y : y + h, x : x + w]
+        plate_region = cv2.GaussianBlur(plate_region, (15, 15), 0)
+        image[y : y + h, x : x + w] = plate_region
+    return image
 
 # 解析检测结果并绘制到图像上
-def draw_detections(image, detections):
+def draw_detections(image: np.ndarray, detections: List[Dict[str, any]]) -> np.ndarray:
     for detection in detections:
         name = detection["name"]
         confidence = detection["confidence"]
@@ -46,14 +60,20 @@ def draw_detections(image, detections):
 
     return image
 
-
 # 发送图像数据到服务器
-async def send_file(uri, image_data, image_name, token):
+async def send_file(url: str, frame: np.ndarray, image_name: str, token: str) -> None:
     try:
         start_time = time.time()  # 记录开始时间
         async with websockets.connect(
-            uri, extra_headers={"Authorization": "Bearer " + token}
+            url, extra_headers={"Authorization": "Bearer " + token}
         ) as websocket:
+            original_image = frame.copy()
+            # 应用人脸和车牌模糊
+            encode_data = blur_faces(frame)
+            encode_data = blur_license_plates(encode_data)
+            # 转为JPEG格式并发送
+            _, buffer = cv2.imencode('.jpg', encode_data, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            image_data = buffer.tobytes()
             await websocket.send(base64.b64encode(image_data).decode())
             await websocket.send(f"END {image_name}")
             response = await websocket.recv()
@@ -64,8 +84,7 @@ async def send_file(uri, image_data, image_name, token):
             if response != "[]":
                 # 解析响应并绘制检测结果到图像
                 detections = json.loads(response)
-                image = cv2.imdecode(np.frombuffer(image_data, np.uint8), cv2.IMREAD_COLOR)
-                image_with_detections = draw_detections(image, detections)
+                image_with_detections = draw_detections(original_image, detections)
                 # 保存结果图像
                 result_path = os.path.join("./client/restmp", image_name)
                 success = cv2.imwrite(result_path, image_with_detections)
@@ -78,9 +97,8 @@ async def send_file(uri, image_data, image_name, token):
     except Exception as e:
         print(f"发生错误: {str(e)}")
 
-
 # 捕获图像并发送到服务器
-async def capture_and_send(uri, token):
+async def capture_and_send(url: str, token: str) -> None:
     cap = cv2.VideoCapture(0)
     frame_count = 0
 
@@ -89,17 +107,12 @@ async def capture_and_send(uri, token):
         if not ret:
             break
         frame_count += 1
-        # 应用人脸模糊
-        frame = blur_faces(frame)
         image_name = f"frame_{frame_count}.jpg"
-        _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-        image_data = buffer.tobytes()
-        await send_file(uri, image_data, image_name, token)
+        await send_file(url, frame, image_name, token)
     cap.release()
 
-
 # 读取视频文件并发送到服务器
-async def capture_and_send_from_video(uri, token, video_path):
+async def capture_and_send_from_video(url: str, token: str, video_path: str) -> None:
     cap = cv2.VideoCapture(video_path)
     frame_count = 0
 
@@ -109,19 +122,13 @@ async def capture_and_send_from_video(uri, token, video_path):
             break
         frame_count += 1
         if frame_count % 30 == 0:  # 每隔30帧发送一次
-            freame_count = 0
-            # 应用人脸模糊
-            frame = blur_faces(frame)
             image_name = f"frame_{frame_count}.jpg"
-            _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
-            image_data = buffer.tobytes()
-            await send_file(uri, image_data, image_name, token)
+            await send_file(url, frame, image_name, token)
     cap.release()
 
-
 if __name__ == "__main__":
-    url = "ws://103.228.12.147:6789"
-    # url = "ws://127.0.0.1:6789"
+    # url = "ws://103.228.12.147:6789"
+    url = "ws://127.0.0.1:6789"
     # 调用摄像头版
     # asyncio.run(capture_and_send(
     #     "ws://127.0.0.1:6789",
