@@ -15,7 +15,13 @@ face_cascade = cv2.CascadeClassifier(
 plate_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_russian_plate_number.xml"
 )
-
+# 清除restmp内的文件
+for root, dirs, files in os.walk("./client/restmp", topdown=False):
+    for name in files:
+        os.remove(os.path.join(root, name))
+    for name in dirs:
+        os.rmdir(os.path.join(root, name))
+    break
 # 人脸模糊函数
 def blur_faces(image: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
