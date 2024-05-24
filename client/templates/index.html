@@ -1,0 +1,85 @@
+{% extends "base.html" %} {% block content %}
+<div class="layui-container">
+  <div class="layui-row">
+    <div class="layui-col-xs12">
+      <button class="layui-btn" id="start-camera-btn">摄像头调用</button>
+      <button class="layui-btn" id="start-video-btn">视频调用</button>
+      <input
+        type="text"
+        id="video-path"
+        placeholder="Enter video path"
+        class="layui-input"
+        value="test.mp4"
+      />
+      <button class="layui-btn layui-btn-danger" id="stop-btn">停止</button>
+      <div id="status"></div>
+      <div class="image-container">
+        <img id="latest-frame" src="" alt="Latest Frame" />
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  $(document).ready(function () {
+    let logId = null;
+    let eventSource = null;
+
+    $("#start-camera-btn").click(function () {
+      $.post("/start_processing", { input_type: "camera" }, function (data) {
+        $("#status").text("Processing started with log ID: " + data.log_id);
+        logId = data.log_id;
+        startSSE();
+      }).fail(function () {
+        $("#status").text("Error starting processing.");
+      });
+    });
+
+    $("#start-video-btn").click(function () {
+      const videoPath = $("#video-path").val();
+      $.post(
+        "/start_processing",
+        { input_type: "video", video_path: videoPath },
+        function (data) {
+          $("#status").text("Processing started with log ID: " + data.log_id);
+          logId = data.log_id;
+          startSSE();
+        }
+      ).fail(function () {
+        $("#status").text("Error starting processing.");
+      });
+    });
+
+    $("#stop-btn").click(function () {
+      stop();
+    });
+
+    function stop() {
+      $.post("/stop_processing", function (data) {
+        $("#status").text("Processing stopped.");
+        if (eventSource) {
+          eventSource.close();
+        }
+      }).fail(function () {
+        $("#status").text("Error stopping processing.");
+      });
+    }
+
+    function startSSE() {
+      if (eventSource) {
+        eventSource.close();
+      }
+      eventSource = new EventSource('/stream');
+      eventSource.onmessage = function (event) {
+        const data = JSON.parse(event.data);
+        if (data.img_base64) {
+          $("#latest-frame").attr("src", "data:image/jpeg;base64," + data.img_base64);
+        }
+      };
+      eventSource.onerror = function (event) {
+        $("#status").text("Error with SSE connection.");
+        eventSource.close();
+      };
+    }
+  });
+</script>
+{% endblock %}

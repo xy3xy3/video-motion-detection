@@ -1,3 +1,5 @@
+import os
+import json
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 
@@ -16,6 +18,9 @@ class Frame(Base):
     __tablename__ = 'frame'
     id = Column(Integer, primary_key=True)
     log_id = Column(Integer, ForeignKey('log.id'))
+    path = Column(String)
+    time = Column(DateTime)
+    data = Column(String)  # 存储JSON数据
     log = relationship("Log", back_populates="frames")
 
 # 为 Log 模型添加关系
@@ -27,8 +32,11 @@ class Config(Base):
     k = Column(String, primary_key=True)
     v = Column(String)
 
+# 获取当前脚本文件的绝对路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
 # 创建 SQLite 数据库和会话
-engine = create_engine('sqlite:///client.db')
+engine = create_engine(f'sqlite:///{os.path.join(script_dir, "client.db")}')
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
@@ -60,19 +68,29 @@ def delete_log(log_id):
         session.commit()
 
 # Frame 表的 CRUD 操作
-def create_frame(log_id):
-    new_frame = Frame(log_id=log_id)
+def create_frame(log_id, path, time, data):
+    new_frame = Frame(log_id=log_id, path=path, time=time, data=json.dumps(data))  # 序列化JSON数据
     session.add(new_frame)
     session.commit()
     return new_frame
 
 def get_frame(frame_id):
-    return session.query(Frame).filter_by(id=frame_id).first()
+    frame = session.query(Frame).filter_by(id=frame_id).first()
+    if frame:
+        frame.data = json.loads(frame.data)  # 反序列化JSON数据
+    return frame
 
-def update_frame(frame_id, log_id=None):
+def update_frame(frame_id, log_id=None, path=None, time=None, data=None):
     frame = get_frame(frame_id)
-    if frame and log_id:
-        frame.log_id = log_id
+    if frame:
+        if log_id:
+            frame.log_id = log_id
+        if path:
+            frame.path = path
+        if time:
+            frame.time = time
+        if data:
+            frame.data = json.dumps(data)  # 序列化JSON数据
         session.commit()
     return frame
 
@@ -119,4 +137,4 @@ def save_config(k, v):
         create_config(k, v)
 
 if __name__ == "__main__":
-    save_config("protect_type","face,number_plate")
+    print(get_config("protect_type"))
