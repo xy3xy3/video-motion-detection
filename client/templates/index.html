@@ -2,19 +2,31 @@
 <div class="layui-container">
   <div class="layui-row">
     <div class="layui-col-xs12">
-      <button class="layui-btn" id="start-camera-btn">摄像头调用</button>
-      <button class="layui-btn" id="start-video-btn">视频调用</button>
-      <input
-        type="text"
-        id="video-path"
-        placeholder="Enter video path"
-        class="layui-input"
-        value="test.mp4"
-      />
-      <button class="layui-btn layui-btn-danger" id="stop-btn">停止</button>
+      <div class="button-container">
+        <button class="layui-btn" id="start-camera-btn">摄像头调用</button>
+        <button class="layui-btn" id="start-video-btn">视频调用</button>
+        <input
+          type="text"
+          id="video-path"
+          placeholder="Enter video path"
+          class="layui-input"
+          value="test.mp4"
+          style="flex-grow: 1"
+        />
+        <button
+          class="layui-btn layui-btn-danger"
+          id="stop-btn"
+          style="display: none"
+        >
+          停止
+        </button>
+      </div>
       <div id="status"></div>
+      <div id="framerate">FPS: <span id="fps-value">0</span></div>
       <div class="image-container">
-        <img id="latest-frame" src="" alt="Latest Frame" />
+        <div id="canvas-container" style="position: relative">
+          <canvas id="video-canvas" width="1280" height="720"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -22,13 +34,42 @@
 <script>
   $(document).ready(function () {
     let logId = null;
-    let eventSource = null;
+    let websocket = null;
+    let frameCount = 0;
+    let lastTime = Date.now();
+    const canvas = document.getElementById("video-canvas");
+    const context = canvas.getContext("2d");
+    const img = new Image();
+
+    function drawImage(base64Image) {
+      img.onload = function () {
+        context.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        updateFrameRate();
+      };
+      img.src = "data:image/jpeg;base64," + base64Image;
+    }
+
+    function updateFrameRate() {
+      frameCount++;
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000; // seconds
+      if (deltaTime >= 1) {
+        const fps = frameCount / deltaTime;
+        $("#fps-value").text(fps.toFixed(2));
+        frameCount = 0;
+        lastTime = now;
+      }
+    }
 
     $("#start-camera-btn").click(function () {
       $.post("/start_processing", { input_type: "camera" }, function (data) {
         $("#status").text("Processing started with log ID: " + data.log_id);
         logId = data.log_id;
-        startSSE();
+        $("#stop-btn").show();
+        $("#start-camera-btn").hide();
+        $("#start-video-btn").hide();
+        startWebSocket();
       }).fail(function () {
         $("#status").text("Error starting processing.");
       });
@@ -42,7 +83,10 @@
         function (data) {
           $("#status").text("Processing started with log ID: " + data.log_id);
           logId = data.log_id;
-          startSSE();
+          $("#stop-btn").show();
+          $("#start-camera-btn").hide();
+          $("#start-video-btn").hide();
+          startWebSocket();
         }
       ).fail(function () {
         $("#status").text("Error starting processing.");
@@ -56,28 +100,25 @@
     function stop() {
       $.post("/stop_processing", function (data) {
         $("#status").text("Processing stopped.");
-        if (eventSource) {
-          eventSource.close();
+        $("#stop-btn").hide();
+        $("#start-camera-btn").show();
+        $("#start-video-btn").show();
+        if (websocket) {
+          websocket.close();
         }
       }).fail(function () {
         $("#status").text("Error stopping processing.");
       });
     }
 
-    function startSSE() {
-      if (eventSource) {
-        eventSource.close();
-      }
-      eventSource = new EventSource('/stream');
-      eventSource.onmessage = function (event) {
-        const data = JSON.parse(event.data);
-        if (data.img_base64) {
-          $("#latest-frame").attr("src", "data:image/jpeg;base64," + data.img_base64);
-        }
+    function startWebSocket() {
+      websocket = new WebSocket("ws://" + window.location.host + "/ws/stream");
+      websocket.onmessage = function (event) {
+        drawImage(event.data);
       };
-      eventSource.onerror = function (event) {
-        $("#status").text("Error with SSE connection.");
-        eventSource.close();
+      websocket.onerror = function (event) {
+        $("#status").text("Error with WebSocket connection.");
+        websocket.close();
       };
     }
   });

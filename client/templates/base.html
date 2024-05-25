@@ -9,23 +9,15 @@
     <script src="./static/jquery.min.js"></script>
     <script src="./static/layui/layui.js"></script>
     <style>
+      .button-container {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
       .image-container {
+        margin-top: 20px;
         max-width: 100%;
         text-align: center;
-        margin-top: 20px;
-      }
-      .image-container img {
-        max-width: 100%;
-        height: auto;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        padding: 5px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      #status {
-        margin-top: 20px;
-        font-size: 1.2em;
-        color: #333;
       }
     </style>
   </head>
@@ -33,7 +25,9 @@
     <ul class="layui-nav layui-bg-gray">
       <li class="layui-nav-item"><a href="/">主页</a></li>
       <li class="layui-nav-item"><a href="/log">日志列表</a></li>
+      <li class="layui-nav-item"><a href="/set">系统设置</a></li>
     </ul>
+    <br><br>
     {% block content %}{% endblock %}
   </body>
 </html>

@@ -68,8 +68,8 @@ def delete_log(log_id):
         session.commit()
 
 # Frame 表的 CRUD 操作
-def create_frame(log_id, path, time, data):
-    new_frame = Frame(log_id=log_id, path=path, time=time, data=json.dumps(data))  # 序列化JSON数据
+def create_frame(log_id, time, data):
+    new_frame = Frame(log_id=log_id,  time=time, data=json.dumps(data))  # 序列化JSON数据
     session.add(new_frame)
     session.commit()
     return new_frame
@@ -136,5 +136,16 @@ def save_config(k, v):
         # 如果配置项不存在，创建新的配置项
         create_config(k, v)
 
+def clear_all_logs_and_frames():
+    try:
+        session.query(Frame).delete()
+        session.query(Log).delete()
+        session.commit()
+        print("All logs and frames have been cleared.")
+    except Exception as e:
+        session.rollback()
+        print(f"An error occurred: {e}")
+
+# 调用函数清除所有log和frame的记录
 if __name__ == "__main__":
-    print(get_config("protect_type"))
+    clear_all_logs_and_frames()

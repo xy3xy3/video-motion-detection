@@ -1,0 +1,86 @@
+{% extends "base.html" %} {% block content %}
+<div class="layui-container">
+  <div class="layui-row">
+    <div class="layui-col-xs12">
+      <form class="layui-form" id="settings-form">
+        <div class="layui-form-item">
+          <label class="layui-form-label">Server URL</label>
+          <div class="layui-input-block">
+            <input
+              type="text"
+              name="server_url"
+              required
+              lay-verify="required"
+              placeholder="请输入服务器URL"
+              autocomplete="off"
+              class="layui-input"
+              value="{{ config.server_url }}"
+            />
+          </div>
+        </div>
+        <div class="layui-form-item">
+          <label class="layui-form-label">Protect Type</label>
+          <div class="layui-input-block">
+            <input
+              type="text"
+              name="protect_type"
+              required
+              lay-verify="required"
+              placeholder="请输入保护类型"
+              autocomplete="off"
+              class="layui-input"
+              value="{{ config.protect_type }}"
+            />
+          </div>
+        </div>
+        <div class="layui-form-item">
+          <label class="layui-form-label">Compress</label>
+          <div class="layui-input-block">
+            <input
+              type="number"
+              name="compress"
+              required
+              lay-verify="required"
+              placeholder="请输入压缩率"
+              autocomplete="off"
+              class="layui-input"
+              value="{{ config.compress }}"
+            />
+          </div>
+        </div>
+        <div class="layui-form-item">
+          <div class="layui-input-block">
+            <button type="button" class="layui-btn" id="save-button">
+              保存
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  $(document).ready(function () {
+    $("#save-button").click(function () {
+      const formData = {
+        server_url: $("input[name='server_url']").val(),
+        protect_type: $("input[name='protect_type']").val(),
+        compress: $("input[name='compress']").val(),
+      };
+
+      $.ajax({
+        url: "/set",
+        type: "POST",
+        data: JSON.stringify(formData),
+        contentType: "application/json; charset=utf-8",
+        success: function (response) {
+          layer.msg("设置已保存");
+        },
+        error: function (error) {
+          layer.msg("保存设置时出错");
+        },
+      });
+    });
+  });
+</script>
+{% endblock %}

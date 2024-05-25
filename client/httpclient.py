@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 import time
 
+from db import get_config
+
 # 加载Haar级联分类器
 face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
@@ -24,20 +26,19 @@ for root, dirs, files in os.walk("./client/restmp", topdown=False):
 
 
 # 隐私保护函数
-def privacy_protect(image: np.ndarray) -> np.ndarray:
+def privacy_protect(image: np.ndarray,protect_type: str) -> np.ndarray:
+    list_type = protect_type.split(",")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # 检测人脸
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-    for x, y, w, h in faces:
-        roi = image[y : y + h, x : x + w]
-        roi = cv2.GaussianBlur(roi, (23, 23), 30)
-        image[y : y + h, x : x + w] = roi
-    # 车牌打码函数
-    plates = plate_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5)
-    for x, y, w, h in plates:
-        plate_region = image[y : y + h, x : x + w]
-        plate_region = cv2.GaussianBlur(plate_region, (15, 15), 0)
-        image[y : y + h, x : x + w] = plate_region
+    if "face" in list_type:
+        # 检测人脸
+        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+        for x, y, w, h in faces:
+            image[y : y + h, x : x + w] = cv2.blur(image[y : y + h, x : x + w], (30, 30))
+    if "plate" in list_type:
+        # 车牌打码函数
+        plates = plate_cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5)
+        for x, y, w, h in plates:
+            image[y : y + h, x : x + w] = cv2.blur(image[y : y + h, x : x + w], (30, 30))
     return image
 
 
@@ -64,7 +65,7 @@ def draw_detections(image: np.ndarray, detections: List[Dict[str, any]]) -> np.n
 
 # 发送图像数据到服务器并接收检测结果
 def send_file(file_path: str, original_image: np.ndarray, output_path: str) -> dict:
-    url = "http://127.0.0.1:8000/predict/"
+    url = get_config("server_url") + "/predict/"
     with open(file_path, "rb") as f:
         start_time = time.time()  # 记录开始时间
         response = requests.post(url, files={"file": f})
@@ -83,8 +84,10 @@ def send_file(file_path: str, original_image: np.ndarray, output_path: str) -> d
 
 
 # 压缩jpg
-def compress_jpg(image: np.ndarray) -> np.ndarray:
-    _, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+def compress_jpg(image: np.ndarray, rate:int = 90) -> np.ndarray:
+    if rate == 100:
+        return image
+    _, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), rate])
     return cv2.imdecode(buffer, cv2.IMREAD_COLOR)
 
 
@@ -138,4 +141,5 @@ if __name__ == "__main__":
     # 调用摄像头版
     # capture_and_send()
     # 调用本地当前目录test.mp4模拟版
-    capture_and_send_from_video(video_path)
+    # capture_and_send_from_video(video_path)
+    print(cv2.data.haarcascades )
