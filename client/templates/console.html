@@ -1,0 +1,125 @@
+{% extends "base.html" %} {% block content %}
+<div class="layui-card">
+  <div class="layui-card-header">控制台</div>
+  <div class="layui-card-body" pad15="">
+    <div class="button-container">
+      <button class="layui-btn" id="start-camera-btn">摄像头调用</button>
+      <button class="layui-btn" id="start-video-btn">视频调用</button>
+      <input
+        type="text"
+        id="video-path"
+        placeholder="Enter video path"
+        class="layui-input"
+        value="test.mp4"
+        style="flex-grow: 1"
+      />
+      <button
+        class="layui-btn layui-btn-danger"
+        id="stop-btn"
+        style="display: none"
+      >
+        停止
+      </button>
+    </div>
+    <div id="status"></div>
+    <div id="framerate">FPS: <span id="fps-value">0</span></div>
+    <div class="canvas-container">
+      <canvas id="video-canvas" width="640" height="480"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block js %}
+<script>
+  $(document).ready(function () {
+    let logId = null;
+    let websocket = null;
+    let frameCount = 0;
+    let lastTime = Date.now();
+    const canvas = document.getElementById("video-canvas");
+    const context = canvas.getContext("2d");
+    const img = new Image();
+
+    function drawImage(base64Image) {
+      img.onload = function () {
+        context.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        updateFrameRate();
+      };
+      img.src = "data:image/jpeg;base64," + base64Image;
+    }
+
+    function updateFrameRate() {
+      frameCount++;
+      const now = Date.now();
+      const deltaTime = (now - lastTime) / 1000; // seconds
+      if (deltaTime >= 1) {
+        const fps = frameCount / deltaTime;
+        $("#fps-value").text(fps.toFixed(2));
+        frameCount = 0;
+        lastTime = now;
+      }
+    }
+
+    $("#start-camera-btn").click(function () {
+      $.post("/start_processing", { input_type: "camera" }, function (data) {
+        $("#status").text("Processing started with log ID: " + data.log_id);
+        logId = data.log_id;
+        $("#stop-btn").show();
+        $("#start-camera-btn").hide();
+        $("#start-video-btn").hide();
+        startWebSocket();
+      }).fail(function () {
+        layer.msg("Error starting processing.")
+        $("#status").text("Error starting processing.");
+      });
+    });
+
+    $("#start-video-btn").click(function () {
+      startWebSocket();
+      const videoPath = $("#video-path").val();
+      $.post(
+        "/start_processing",
+        { input_type: "video", video_path: videoPath },
+        function (data) {
+          $("#status").text("Processing started with log ID: " + data.log_id);
+          logId = data.log_id;
+          $("#stop-btn").show();
+          $("#start-camera-btn").hide();
+          $("#start-video-btn").hide();
+        }
+      ).fail(function () {
+        $("#status").text("Error starting processing.");
+      });
+    });
+
+    $("#stop-btn").click(function () {
+      stop();
+    });
+
+    function stop() {
+      $.post("/stop_processing", function (data) {
+        $("#status").text("Processing stopped.");
+        $("#stop-btn").hide();
+        $("#start-camera-btn").show();
+        $("#start-video-btn").show();
+        if (websocket) {
+          websocket.close();
+        }
+      }).fail(function () {
+        $("#status").text("Error stopping processing.");
+      });
+    }
+
+    function startWebSocket() {
+      websocket = new WebSocket("ws://" + window.location.host + "/ws/stream");
+      websocket.onmessage = function (event) {
+        drawImage(event.data);
+      };
+      websocket.onerror = function (event) {
+        $("#status").text("Error with WebSocket connection.");
+        websocket.close();
+      };
+    }
+  });
+</script>
+{% endblock %}

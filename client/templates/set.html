@@ -1,71 +1,86 @@
 {% extends "base.html" %} {% block content %}
-<div class="layui-container">
-  <div class="layui-row">
-    <div class="layui-col-xs12">
-      <form class="layui-form" id="settings-form">
-        <div class="layui-form-item">
-          <label class="layui-form-label">Server URL</label>
-          <div class="layui-input-block">
-            <input
-              type="text"
-              name="server_url"
-              required
-              lay-verify="required"
-              placeholder="请输入服务器URL"
-              autocomplete="off"
-              class="layui-input"
-              value="{{ config.server_url }}"
-            />
-          </div>
+<div class="layui-card">
+  <div class="layui-card-header">设置</div>
+  <div class="layui-card-body" pad15="">
+    <form class="layui-form" id="settings-form">
+      <div class="layui-form-item">
+        <label class="layui-form-label">服务端url</label>
+        <div class="layui-input-block">
+          <input
+            type="text"
+            name="server_url"
+            required
+            lay-verify="required"
+            placeholder="请输入服务器URL"
+            autocomplete="off"
+            class="layui-input"
+            value="{{ config.server_url }}"
+          />
         </div>
-        <div class="layui-form-item">
-          <label class="layui-form-label">Protect Type</label>
-          <div class="layui-input-block">
-            <input
-              type="text"
-              name="protect_type"
-              required
-              lay-verify="required"
-              placeholder="请输入保护类型"
-              autocomplete="off"
-              class="layui-input"
-              value="{{ config.protect_type }}"
-            />
-          </div>
+      </div>
+      <div class="layui-form-item">
+        <label class="layui-form-label">保护类型</label>
+        <div class="layui-input-block">
+          <input
+            type="text"
+            name="protect_type"
+            required
+            lay-verify="required"
+            placeholder="请输入保护类型"
+            autocomplete="off"
+            class="layui-input"
+            value="{{ config.protect_type }}"
+          />
         </div>
-        <div class="layui-form-item">
-          <label class="layui-form-label">Compress</label>
-          <div class="layui-input-block">
-            <input
-              type="number"
-              name="compress"
-              required
-              lay-verify="required"
-              placeholder="请输入压缩率"
-              autocomplete="off"
-              class="layui-input"
-              value="{{ config.compress }}"
-            />
-          </div>
+        <pre>目前支持face,plate；多个用,分隔</pre>
+      </div>
+      <div class="layui-form-item">
+        <label class="layui-form-label">是否转为灰度图像</label>
+        <div class="layui-input-block">
+          <select name="grayscale" id="grayscale-select" lay-filter="grayscale">
+            <option value="0">否</option>
+            <option value="1">是</option>
+          </select>
         </div>
-        <div class="layui-form-item">
-          <div class="layui-input-block">
-            <button type="button" class="layui-btn" id="save-button">
-              保存
-            </button>
-          </div>
+      </div>
+      <div class="layui-form-item">
+        <label class="layui-form-label">压缩率(1-100)</label>
+        <div class="layui-input-block">
+          <input
+            type="number"
+            name="compress"
+            required
+            lay-verify="required"
+            placeholder="请输入压缩率"
+            autocomplete="off"
+            class="layui-input"
+            value="{{ config.compress }}"
+          />
         </div>
-      </form>
-    </div>
+      </div>
+      <div class="layui-form-item">
+        <div class="layui-input-block">
+          <button type="button" class="layui-btn" id="save-button">保存</button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
+{% endblock %} {% block js %}
 <script>
-  $(document).ready(function () {
+  layui.use(["form", "jquery"], function () {
+    var form = layui.form;
+    var $ = layui.jquery;
+    var grayscale = "{{ config.grayscale }}"; // 这里的 config.grayscale 应该替换为实际的值
+    $("select[name='grayscale']").val(grayscale);
+    form.render("select"); //刷新select选择框渲染
+
     $("#save-button").click(function () {
       const formData = {
         server_url: $("input[name='server_url']").val(),
         protect_type: $("input[name='protect_type']").val(),
         compress: $("input[name='compress']").val(),
+        grayscale: $("select[name='grayscale']").val(),
       };
 
       $.ajax({

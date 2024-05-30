@@ -5,16 +5,16 @@
     {% else %}
     <title>网页</title>
     {% endif %}
-    <link rel="stylesheet" href="./static/layui/css/layui.css" media="all" />
-    <script src="./static/jquery.min.js"></script>
-    <script src="./static/layui/layui.js"></script>
+    <link rel="stylesheet" href="/static/layui/css/layui.css" media="all" />
+    <script src="/static/jquery.min.js"></script>
+    <script src="/static/layui/layui.js"></script>
     <style>
       .button-container {
         display: flex;
         gap: 10px;
         margin-bottom: 10px;
       }
-      .image-container {
+      .canvas-container {
         margin-top: 20px;
         max-width: 100%;
         text-align: center;
@@ -22,12 +22,12 @@
     </style>
   </head>
   <body>
-    <ul class="layui-nav layui-bg-gray">
-      <li class="layui-nav-item"><a href="/">主页</a></li>
-      <li class="layui-nav-item"><a href="/log">日志列表</a></li>
-      <li class="layui-nav-item"><a href="/set">系统设置</a></li>
-    </ul>
-    <br><br>
-    {% block content %}{% endblock %}
+    <br />
+    <div class="layui-fluid" id="LAY-app-message">
+      <div class="layui-row">
+        <div class="layui-col-xs12">{% block content %}{% endblock %}</div>
+      </div>
+    </div>
+    {% block js %}{% endblock %}
   </body>
 </html>

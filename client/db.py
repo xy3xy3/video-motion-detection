@@ -2,7 +2,9 @@ import os
 import json
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
-
+from sqlalchemy.sql import text
+from databases import Database
+from sqlalchemy import create_engine, MetaData
 # 创建 ORM 模型的基类
 Base = declarative_base()
 
@@ -18,7 +20,7 @@ class Frame(Base):
     __tablename__ = 'frame'
     id = Column(Integer, primary_key=True)
     log_id = Column(Integer, ForeignKey('log.id'))
-    path = Column(String)
+    base64 = Column(String)
     time = Column(DateTime)
     data = Column(String)  # 存储JSON数据
     log = relationship("Log", back_populates="frames")
@@ -36,17 +38,20 @@ class Config(Base):
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # 创建 SQLite 数据库和会话
-engine = create_engine(f'sqlite:///{os.path.join(script_dir, "client.db")}')
+path = f'sqlite:///{os.path.join(script_dir, "client.db")}'
+engine = create_engine(path)
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
-
+database = Database(path)
 # Log 表的 CRUD 操作
 def create_log(start_time, end_time):
     new_log = Log(start_time=start_time, end_time=end_time)
     session.add(new_log)
     session.commit()
     return new_log
+def get_all_logs():
+    return session.query(Log).all()
 
 def get_log(log_id):
     return session.query(Log).filter_by(id=log_id).first()
@@ -64,12 +69,23 @@ def update_log(log_id, start_time=None, end_time=None):
 def delete_log(log_id):
     log = get_log(log_id)
     if log:
+        # 删除所有frame记录
+        for frame in log.frames:
+            session.delete(frame)
         session.delete(log)
         session.commit()
 
+def get_frames_by_log_id(log_id: int = 0):
+    query = session.query(Frame)
+    if log_id!=0:
+        query = query.filter(Frame.log_id == log_id)
+    return query
+
 # Frame 表的 CRUD 操作
-def create_frame(log_id, time, data):
-    new_frame = Frame(log_id=log_id,  time=time, data=json.dumps(data))  # 序列化JSON数据
+def create_frame(log_id, time, data=None, base64=None):
+    if data:
+        data = json.dumps(data)
+    new_frame = Frame(log_id=log_id,  time=time, data=data,base64=base64)  # 序列化JSON数据
     session.add(new_frame)
     session.commit()
     return new_frame
@@ -80,13 +96,13 @@ def get_frame(frame_id):
         frame.data = json.loads(frame.data)  # 反序列化JSON数据
     return frame
 
-def update_frame(frame_id, log_id=None, path=None, time=None, data=None):
+def update_frame(frame_id, log_id=None, base64=None, time=None, data=None):
     frame = get_frame(frame_id)
     if frame:
         if log_id:
             frame.log_id = log_id
-        if path:
-            frame.path = path
+        if base64:
+            frame.base64 = base64
         if time:
             frame.time = time
         if data:
@@ -138,10 +154,22 @@ def save_config(k, v):
 
 def clear_all_logs_and_frames():
     try:
+        # 删除所有的 frame 和 log 记录
         session.query(Frame).delete()
         session.query(Log).delete()
         session.commit()
-        print("All logs and frames have been cleared.")
+        
+        # 重置 Log 表的主键自增计数
+        session.execute(text("DELETE FROM sqlite_sequence WHERE name='log'"))
+        session.commit()
+        
+        # 重置 Frame 表的主键自增计数
+        session.execute(text("DELETE FROM sqlite_sequence WHERE name='frame'"))
+        session.commit()
+        # 执行VACUUM
+        session.execute(text("VACUUM"))
+        session.commit()
+        print("All logs and frames have been cleared, and the primary key sequences have been reset.")
     except Exception as e:
         session.rollback()
         print(f"An error occurred: {e}")

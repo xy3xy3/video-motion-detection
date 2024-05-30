@@ -1,0 +1,115 @@
+{% extends "base.html" %} {% block content %}
+<div class="layui-card">
+  <div class="layui-card-header">日志记录</div>
+  <div class="layui-card-body" pad15="">
+    <table id="logTable" lay-filter="logTable"></table>
+  </div>
+</div>
+{% endblock %} {% block js %}
+
+<script>
+  layui.use(["table", "layer"], function () {
+    var table = layui.table;
+    var layer = layui.layer;
+
+    // 定义表格
+    table.render({
+      elem: "#logTable",
+      url: "/log/list",
+      cols: [
+        [
+          { field: "id", title: "ID", width: 80, sort: true },
+          { field: "start_time", title: "开始时间", sort: true },
+          { field: "end_time", title: "结束时间", sort: true },
+          { fixed: "right", title: "操作", toolbar: "#logActions", width: 150 },
+        ],
+      ],
+      page: true,
+      limit: 10,
+      limits: [10, 15, 20, 25, 30],
+      text: {
+        none: "无数据", //默认：无数据。注：该属性为 layui 2.2.5 开始新增
+      },
+    });
+
+    // 监听工具条
+    table.on("tool(logTable)", function (obj) {
+      var data = obj.data;
+      if (obj.event === "view") {
+        viewLog(data.id);
+      } else if (obj.event === "del") {
+        layer.confirm("真的删除行么", function (index) {
+          deleteLog(data.id);
+          layer.close(index);
+        });
+      }
+    });
+
+    function viewLog(logId) {
+      layer.open({
+        type: 1,
+        title: "查看日志",
+        content:
+          '<div class="canvas-container"><canvas id="video-canvas" width="640" height="480"></canvas></div>',
+        area: ["800px", "600px"],
+        cancel: function (index, layero) {
+          if (websocket) {
+            websocket.close();
+          }
+        },
+        end: function () {
+          if (websocket) {
+            websocket.close();
+          }
+        },
+      });
+      startWebSocket(logId);
+    }
+
+    function deleteLog(logId) {
+      $.ajax({
+        url: "/log/" + logId,
+        type: "DELETE",
+        success: function (result) {
+          table.reload("logTable");
+        },
+      });
+    }
+
+    let websocket;
+
+    function startWebSocket(logId) {
+      const canvas = document.getElementById("video-canvas");
+      const context = canvas.getContext("2d");
+      const img = new Image();
+
+      function drawImage(base64Image) {
+        img.onload = function () {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(img, 0, 0, canvas.width, canvas.height);
+        };
+        img.src = "data:image/jpeg;base64," + base64Image;
+      }
+
+      websocket = new WebSocket(
+        "ws://" + window.location.host + "/ws/stream/" + logId
+      );
+      websocket.onmessage = function (event) {
+        drawImage(event.data);
+      };
+      websocket.onerror = function (event) {
+        console.log("Error with WebSocket connection.");
+        websocket.close();
+      };
+      websocket.onclose = function () {
+        console.log("WebSocket connection closed.");
+      };
+    }
+  });
+</script>
+<!-- 表格操作栏 -->
+<script type="text/html" id="logActions">
+  <a class="layui-btn layui-btn-xs" lay-event="view">查看</a>
+  <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+</script>
+{% endblock %}

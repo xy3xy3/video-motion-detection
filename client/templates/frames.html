@@ -1,0 +1,133 @@
+{% extends "base.html" %} {% block content %}
+<div class="layui-card">
+  <div class="layui-card-header">视频帧管理</div>
+  <div class="layui-card-body" pad15="">
+    <div class="layui-form">
+      <div class="layui-form-item">
+        <label class="layui-form-label">选择视频</label>
+        <div class="layui-input-block">
+          <select id="videoSelect" lay-filter="videoSelect">
+            <option value="0">所有</option>
+            {% for video in videos %}
+            <option value="{{ video.id }}">{{ video.start_time }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+    <button id="loadFramesButton" class="layui-btn">加载视频帧</button>
+    <table id="frameTable" lay-filter="frameTable"></table>
+  </div>
+</div>
+{% endblock %} {% block js %}
+<script>
+  layui.use(["table", "layer", "form", "jquery"], function () {
+    var table = layui.table;
+    var layer = layui.layer;
+    var form = layui.form;
+    var $ = layui.jquery;
+
+    // 定义表格
+    table.render({
+      elem: "#frameTable",
+      cols: [
+        [
+          { field: "id", title: "ID", width: 150, sort: true },
+          {
+            field: "base64",
+            title: "帧图像",
+            width: 150,
+            templet: function (d) {
+              img_id = "photo" + d.id;
+              return `<img id="${img_id}" onclick="show_photo('#${img_id}')" style="display: inline-block; width: 50%; height: 100%;" src= "data:image/jpeg;base64,${d.base64}">`;
+            },
+          },
+          { field: "data", title: "数据", width: 300},
+          { field: "time", title: "时间", width: 200 },
+          {
+            fixed: "right",
+            title: "操作",
+            toolbar: "#frameActions",
+            width: 100,
+          },
+        ],
+      ],
+      page: true,
+      limit: 10,
+      limits: [10, 15, 20, 25, 30],
+      text: {
+        none: "无数据",
+      },
+    });
+
+    // 监听工具条
+    table.on("tool(frameTable)", function (obj) {
+      var data = obj.data;
+      if (obj.event === "del") {
+        layer.confirm("真的删除帧么", function (index) {
+          deleteFrame(data.id);
+          layer.close(index);
+        });
+      }
+    });
+
+    function deleteFrame(frameId) {
+      $.ajax({
+        url: "/frames/" + frameId,
+        type: "DELETE",
+        success: function (result) {
+          table.reload("frameTable");
+        },
+      });
+    }
+
+    // 加载视频帧
+    $("#loadFramesButton").on("click", function () {
+      var videoId = $("#videoSelect").val();
+      table.reload("frameTable", {
+        url: "/frames/list",
+        where: { log_id: videoId },
+        page: { curr: 1 },
+      });
+    });
+
+    table.reload("frameTable", {
+      url: "/frames/list",
+      where: { log_id: 0 },
+      page: { curr: 1 },
+    });
+    form.render(); // 重新渲染表单
+
+    // 显示图片的函数
+    function show_photo(id) {
+      var img = $(id).attr("src"); // 获取图片的src属性
+      layer.photos({
+        footer:false,
+        photos: {
+          // 图片层的数据源
+          title: "", // 相册标题
+          id: 123, // 相册 id
+          start: 0, // 初始显示的图片序号，默认 0
+          data: [
+            {
+              alt: "图片名",
+              pid: 666, // 图片id
+              src: img, // 原图地址
+            },
+          ],
+        },
+        tab: function (data, layero) {
+          // 图片层切换后的回调
+          console.log(data); // 当前图片数据信息
+          console.log(layero); // 图片层的容器对象
+        },
+      });
+    }
+    window.show_photo = show_photo;
+  });
+</script>
+<!-- 表格操作栏 -->
+<script type="text/html" id="frameActions">
+  <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del">删除</a>
+</script>
+{% endblock %}
