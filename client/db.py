@@ -3,7 +3,6 @@ import json
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 from sqlalchemy.sql import text
-from databases import Database
 from sqlalchemy import create_engine, MetaData
 # 创建 ORM 模型的基类
 Base = declarative_base()
@@ -43,7 +42,6 @@ engine = create_engine(path)
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
-database = Database(path)
 # Log 表的 CRUD 操作
 def create_log(start_time, end_time):
     new_log = Log(start_time=start_time, end_time=end_time)
@@ -85,6 +83,8 @@ def get_frames_by_log_id(log_id: int = 0):
 def create_frame(log_id, time, data=None, base64=None):
     if data:
         data = json.dumps(data)
+    if data == {}:
+        data = None
     new_frame = Frame(log_id=log_id,  time=time, data=data,base64=base64)  # 序列化JSON数据
     session.add(new_frame)
     session.commit()
