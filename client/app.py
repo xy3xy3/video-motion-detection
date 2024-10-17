@@ -219,7 +219,7 @@ async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarr
         await process_detection_result(data, log_id, original_frame)
 
 
-# 处理检测结果
+# 处理服务器的检测结果
 async def process_detection_result(data: str, log_id: int, original_frame: np.ndarray):
     detection_result = json.loads(data)
     image_with_detections = fun.draw_detections(original_frame, detection_result)

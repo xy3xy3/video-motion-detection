@@ -48,7 +48,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
             await websocket.send_text(res.tojson(True))
     except WebSocketDisconnect:
-        print("WebSocket connection closed")
+        # print("WebSocket connection closed")
+        pass
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     start_time = time.time()  # 记录开始时间

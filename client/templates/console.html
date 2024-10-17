@@ -34,32 +34,36 @@
     let logId = null;
     let websocket = null;
     let frameCount = 0;
-    let lastTime = Date.now();
+    let lastTime = performance.now();  // 使用 performance.now() 提高时间精度
     const canvas = document.getElementById("video-canvas");
     const context = canvas.getContext("2d");
-    const img = new Image();
+    const img = new Image();  // 预定义图像对象
 
     function drawImage(base64Image) {
-      img.onload = function () {
-        context.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
-        context.drawImage(img, 0, 0, canvas.width, canvas.height);
-        updateFrameRate();
-      };
-      img.src = "data:image/jpeg;base64," + base64Image;
+      img.src = "data:image/jpeg;base64," + base64Image;  // 设定图像来源
     }
+
+    img.onload = function () {
+      requestAnimationFrame(() => {  // 使用 requestAnimationFrame 保证流畅渲染
+        context.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
+        context.drawImage(img, 0, 0, canvas.width, canvas.height);  // 绘制图像
+        updateFrameRate();  // 更新帧率
+      });
+    };
 
     function updateFrameRate() {
       frameCount++;
-      const now = Date.now();
-      const deltaTime = (now - lastTime) / 1000; // seconds
-      if (deltaTime >= 1) {
+      const now = performance.now();
+      const deltaTime = (now - lastTime) / 1000; // 以秒为单位计算时间差
+      if (deltaTime >= 1) {  // 每秒更新一次帧率
         const fps = frameCount / deltaTime;
-        $("#fps-value").text(fps.toFixed(2));
+        $("#fps-value").text(fps.toFixed(2));  // 显示FPS
         frameCount = 0;
         lastTime = now;
       }
     }
 
+    // 开始摄像头调用
     $("#start-camera-btn").click(function () {
       $.post("/start_processing", { input_type: "camera" }, function (data) {
         $("#status").text("Processing started with log ID: " + data.log_id);
@@ -67,15 +71,15 @@
         $("#stop-btn").show();
         $("#start-camera-btn").hide();
         $("#start-video-btn").hide();
-        startWebSocket();
+        startWebSocket();  // 启动 WebSocket 连接
       }).fail(function () {
-        layer.msg("Error starting processing.")
+        layer.msg("Error starting processing.");
         $("#status").text("Error starting processing.");
       });
     });
 
+    // 开始视频调用
     $("#start-video-btn").click(function () {
-      startWebSocket();
       const videoPath = $("#video-path").val();
       $.post(
         "/start_processing",
@@ -86,40 +90,49 @@
           $("#stop-btn").show();
           $("#start-camera-btn").hide();
           $("#start-video-btn").hide();
+          startWebSocket();  // 启动 WebSocket 连接
         }
       ).fail(function () {
         $("#status").text("Error starting processing.");
       });
     });
 
+    // 停止处理
     $("#stop-btn").click(function () {
-      stop();
+      stopProcessing();
     });
 
-    function stop() {
-      $.post("/stop_processing", function (data) {
+    function stopProcessing() {
+      $.post("/stop_processing", function () {
         $("#status").text("Processing stopped.");
         $("#stop-btn").hide();
         $("#start-camera-btn").show();
         $("#start-video-btn").show();
         if (websocket) {
-          websocket.close();
+          websocket.close();  // 关闭 WebSocket 连接
         }
       }).fail(function () {
         $("#status").text("Error stopping processing.");
       });
     }
 
+    // 启动 WebSocket
     function startWebSocket() {
       websocket = new WebSocket("ws://" + window.location.host + "/ws/stream");
       websocket.onmessage = function (event) {
-        drawImage(event.data);
+        drawImage(event.data);  // 处理传入的帧
       };
-      websocket.onerror = function (event) {
-        $("#status").text("Error with WebSocket connection.");
+
+      websocket.onerror = function () {
+        $("#status").text("WebSocket connection error.");
         websocket.close();
+      };
+
+      websocket.onclose = function () {
+        $("#status").text("WebSocket connection closed.");
       };
     }
   });
 </script>
 {% endblock %}
+
