@@ -225,6 +225,9 @@ async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarr
         image_with_detections = fun.draw_detections(original_frame, detection_result)
         _, buffer = cv2.imencode(".jpg", image_with_detections)
 
+        await asyncio.to_thread(
+            create_frame, log_id, time=datetime.now(), data=None, base64=img_str
+        )
         # 使用二进制发送到客户端
         await send_image_to_client(buffer.tobytes())
 

@@ -125,6 +125,7 @@ def create_config(k, v):
 
 def get_config(k):
     config = session.query(Config).filter_by(k=k).first()
+    print(f"{k} : {config.v}")
     if config:
         return config.v
     return None
@@ -144,6 +145,8 @@ def delete_config(k):
 
 # 保存或更新 Config 表的项
 def save_config(k, v):
+    if not v:
+        return
     config = get_config(k)
     if config:
         # 如果配置项存在，更新值
@@ -158,11 +161,11 @@ def clear_all_logs_and_frames():
         session.query(Frame).delete()
         session.query(Log).delete()
         session.commit()
-        
+
         # 重置 Log 表的主键自增计数
         session.execute(text("DELETE FROM sqlite_sequence WHERE name='log'"))
         session.commit()
-        
+
         # 重置 Frame 表的主键自增计数
         session.execute(text("DELETE FROM sqlite_sequence WHERE name='frame'"))
         session.commit()
