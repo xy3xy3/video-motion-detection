@@ -15,6 +15,7 @@ from videos import router as videos_router
 from frames import router as frames_router
 import multiprocessing
 from multiprocessing import Queue, Process
+import time  # 用于记录时间
 
 
 @asynccontextmanager
@@ -221,26 +222,54 @@ async def fake_process(frame: np.ndarray, log_id: int, original_frame: np.ndarra
 
 # 发送帧到远程websocket并放入队列
 async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
-    server_url = get_config("server_url").replace("http", "ws") + "/ws/predict"
-    async with websockets.connect(server_url) as websocket:
-        _, buffer = cv2.imencode(".jpg", frame)
+    start_time = time.time()  # 开始记录时间
 
-        # 直接发送二进制数据到服务器
+    # 获取服务器URL
+    server_url = get_config("server_url").replace("http", "ws") + "/ws/predict"
+    url_time = time.time()  # 记录URL准备时间
+    print(f"URL准备时间: {(url_time - start_time) * 1000:.2f}ms")
+
+    async with websockets.connect(server_url) as websocket:
+        # 编码图像为JPEG格式
+        encode_start = time.time()  # 记录编码开始时间
+        _, buffer = cv2.imencode(".jpg", frame)
+        encode_end = time.time()  # 记录编码结束时间
+        print(f"图像编码时间: {(encode_end - encode_start) * 1000:.2f}ms")
+
+        # 发送二进制数据到服务器
+        send_start = time.time()
         await websocket.send(buffer.tobytes())
+        send_end = time.time()
+        print(f"发送数据时间: {(send_end - send_start) * 1000:.2f}ms")
 
         # 接收服务器的检测结果
+        recv_start = time.time()
         data = await websocket.recv()
+        recv_end = time.time()
+        print(f"接收数据时间: {(recv_end - recv_start) * 1000:.2f}ms")
 
         # 处理返回的检测结果
+        process_start = time.time()
         detection_result = json.loads(data)
         image_with_detections = fun.draw_detections(original_frame, detection_result)
         _, buffer = cv2.imencode(".jpg", image_with_detections)
+        process_end = time.time()
+        print(f"处理检测结果时间: {(process_end - process_start) * 1000:.2f}ms")
 
         # 将帧数据放入队列
+        queue_start = time.time()
         frame_queue.put((log_id, detection_result, buffer.tobytes()))
+        queue_end = time.time()
+        print(f"放入队列时间: {(queue_end - queue_start) * 1000:.2f}ms")
 
-        # 同时发送给前端用户
+        # 发送图像到客户端
+        client_send_start = time.time()
         await send_image_to_client(buffer.tobytes())
+        client_send_end = time.time()
+        print(f"发送图像给客户端时间: {(client_send_end - client_send_start) * 1000:.2f}ms")
+
+    total_time = time.time() - start_time
+    print(f"总时间: {total_time * 1000:.2f}ms\n")
 
 
 
