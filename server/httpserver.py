@@ -1,7 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 import torch
-from ultralytics import YOLOv10
+from ultralytics import YOLO
 from PIL import Image
 import numpy as np
 from io import BytesIO
@@ -19,7 +19,7 @@ app = FastAPI()
 # 加载YOLO模型
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
 # m 20.2ms n 15-25ms s 14-21ms
-model = YOLOv10("./models/yolov10s.pt")
+model = YOLO("./models/yolo11n.pt")
 model.model.names=default_class_names("coco8.yaml")
 
 @app.websocket("/ws/predict")
@@ -31,7 +31,7 @@ async def websocket_endpoint(websocket: WebSocket):
             frame_data = base64.b64decode(data)
             nparr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
+
             # 进行YOLO模型预测
             res = model.predict(source=frame, device=device,
                                 classes=[0, 2, 3, 5, 6, 7, 9, 11, 12],
@@ -45,7 +45,7 @@ async def websocket_endpoint(websocket: WebSocket):
             if boxes_data is None:
                 await websocket.send_text(json.dumps({}))
                 continue
-            
+
             await websocket.send_text(res.tojson(True))
     except WebSocketDisconnect:
         print("WebSocket connection closed")
@@ -66,7 +66,7 @@ async def predict(file: UploadFile = File(...)):
         end_time = time.time()  # 记录结束时间
         inference_time = end_time - start_time  # 计算推理用时
         print(f"推理用时: {inference_time:.2f} 秒")
-        
+
         data = res.boxes or res.obb
         if data is None:
             return JSONResponse(content={})
