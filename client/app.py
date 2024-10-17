@@ -209,21 +209,29 @@ async def fake_process(frame: np.ndarray, log_id: int, original_frame: np.ndarra
 
 
 # 发送帧到远程websocket
+# 发送帧到远程websocket
 async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
     server_url = get_config("server_url").replace("http", "ws") + "/ws/predict"
     async with websockets.connect(server_url) as websocket:
+        # 编码帧为JPG格式，返回buffer（即二进制数据）
         _, buffer = cv2.imencode(".jpg", frame)
-        frame_base64 = base64.b64encode(buffer).decode("utf-8")
-        # 发送服务端
-        await websocket.send(frame_base64)
+
+        # 直接发送二进制数据而不是Base64编码后的数据
+        await websocket.send(buffer.tobytes())
+
+        # 接收来自服务端的检测结果
         data = await websocket.recv()
-        # 发送客户端
+
+        # 处理返回的检测结果
         detection_result = json.loads(data)
         image_with_detections = fun.draw_detections(original_frame, detection_result)
         _, buffer = cv2.imencode(".jpg", image_with_detections)
+
+        # 继续发送给客户端的WebSocket连接
         img_str = base64.b64encode(buffer).decode()
         create_frame(log_id, time=datetime.now(), data=detection_result, base64=img_str)
         await send_image_to_client(img_str)
+
 
 
 # 发送图片到客户端
