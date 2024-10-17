@@ -214,19 +214,16 @@ async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarr
     async with websockets.connect(server_url) as websocket:
         _, buffer = cv2.imencode(".jpg", frame)
         frame_base64 = base64.b64encode(buffer).decode("utf-8")
+        # 发送服务端
         await websocket.send(frame_base64)
         data = await websocket.recv()
-        await process_detection_result(data, log_id, original_frame)
-
-
-# 处理服务器的检测结果
-async def process_detection_result(data: str, log_id: int, original_frame: np.ndarray):
-    detection_result = json.loads(data)
-    image_with_detections = fun.draw_detections(original_frame, detection_result)
-    _, buffer = cv2.imencode(".jpg", image_with_detections)
-    img_str = base64.b64encode(buffer).decode()
-    create_frame(log_id, time=datetime.now(), data=detection_result, base64=img_str)
-    await send_image_to_client(img_str)
+        # 发送客户端
+        detection_result = json.loads(data)
+        image_with_detections = fun.draw_detections(original_frame, detection_result)
+        _, buffer = cv2.imencode(".jpg", image_with_detections)
+        img_str = base64.b64encode(buffer).decode()
+        create_frame(log_id, time=datetime.now(), data=detection_result, base64=img_str)
+        await send_image_to_client(img_str)
 
 
 # 发送图片到客户端
