@@ -1,40 +1,51 @@
-import base64
-import os
 import asyncio
-from datetime import datetime
-import numpy as np
-import cv2
-from fastapi import (
-    FastAPI,
-    Request,
-    Form,
-    WebSocket,
-    WebSocketDisconnect,
-    HTTPException,
-)
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+import cv2
 import websockets
+import base64
+import numpy as np
+from datetime import datetime
 from db import *
 import fun
 from videos import router as videos_router
 from frames import router as frames_router
+import multiprocessing
+from multiprocessing import Queue, Process
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 创建并启动一个新进程来处理队列
+    process = Process(target=process_frame_queue, args=(frame_queue,))
+    process.start()
+
+    # 应用启动
+    yield
+
+    # 应用关闭，终止进程
+    process.terminate()
+    process.join()
+
+
+app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 
-# 配置静态文件目录
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
 is_processing = False
-
 websocket_clients = []
 
 # 导入并包括视频管理的路由
 app.include_router(videos_router, prefix="/videos")
 app.include_router(frames_router, prefix="/frames")
+
+# 创建全局帧队列
+frame_queue = Queue()  # 使用多进程队列
+
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -208,16 +219,16 @@ async def fake_process(frame: np.ndarray, log_id: int, original_frame: np.ndarra
     await send_image_to_client(img_str)
 
 
-# 发送帧到远程websocket
+# 发送帧到远程websocket并放入队列
 async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
     server_url = get_config("server_url").replace("http", "ws") + "/ws/predict"
     async with websockets.connect(server_url) as websocket:
         _, buffer = cv2.imencode(".jpg", frame)
 
-        # 直接发送二进制数据而不是Base64编码
+        # 直接发送二进制数据到服务器
         await websocket.send(buffer.tobytes())
 
-        # 接收来自服务器的检测结果
+        # 接收服务器的检测结果
         data = await websocket.recv()
 
         # 处理返回的检测结果
@@ -225,11 +236,12 @@ async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarr
         image_with_detections = fun.draw_detections(original_frame, detection_result)
         _, buffer = cv2.imencode(".jpg", image_with_detections)
 
-        await asyncio.to_thread(
-            create_frame, log_id, time=datetime.now(), data=None, base64=img_str
-        )
-        # 使用二进制发送到客户端
+        # 将帧数据放入队列
+        frame_queue.put((log_id, detection_result, buffer.tobytes()))
+
+        # 同时发送给前端用户
         await send_image_to_client(buffer.tobytes())
+
 
 
 # 发送图片到客户端
@@ -244,7 +256,18 @@ async def send_image_to_client(buffer: bytes):
         except Exception as e:
             print(f"Failed to send image to client: {e}")
 
+# 后台任务：从队列中读取帧并写入数据库（在进程中运行）
+def process_frame_queue(frame_queue: Queue):
+    while True:
+        try:
+            # 从队列中获取帧
+            log_id, detection_result, frame_data = frame_queue.get()
 
+            # 异步写入数据库（可以根据需要调整为同步操作）
+            create_frame(log_id, time=datetime.now(), data=detection_result, base64=base64.b64encode(frame_data).decode())
+
+        except Exception as e:
+            print(f"Error processing frame: {e}")
 
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
@@ -267,6 +290,8 @@ async def websocket_endpoint(websocket: WebSocket, log_id: int):
             await asyncio.sleep(0.05)
     except WebSocketDisconnect:
         print("log推送 disconnect")
+
+
 
 
 if __name__ == "__main__":

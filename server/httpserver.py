@@ -50,7 +50,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # 将检测结果作为JSON发送回客户端
-            await websocket.send_text(res.tojson(True))
+            await websocket.send_text(res.to_json(True))
 
     except WebSocketDisconnect:
         # 处理断开连接

@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime, Foreign
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 from sqlalchemy.sql import text
 from sqlalchemy import create_engine, MetaData
+from sqlalchemy.orm import sessionmaker
 # 创建 ORM 模型的基类
 Base = declarative_base()
 
@@ -19,9 +20,9 @@ class Frame(Base):
     __tablename__ = 'frame'
     id = Column(Integer, primary_key=True)
     log_id = Column(Integer, ForeignKey('log.id'))
-    base64 = Column(String)
+    base64 = Column(String(255))  # 为 base64 列指定长度
     time = Column(DateTime)
-    data = Column(String)  # 存储JSON数据
+    data = Column(String(255))  # 为 data 列指定长度，用于存储JSON数据
     log = relationship("Log", back_populates="frames")
 
 # 为 Log 模型添加关系
@@ -30,14 +31,17 @@ Log.frames = relationship("Frame", order_by=Frame.id, back_populates="log")
 # 定义 Config 模型
 class Config(Base):
     __tablename__ = 'config'
-    k = Column(String, primary_key=True)
-    v = Column(String)
+    k = Column(String(32), primary_key=True)  # 为 VARCHAR 指定长度
+    v = Column(String(32))  # 也为 v 列指定长度
+
 
 # 获取当前脚本文件的绝对路径
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # 创建 SQLite 数据库和会话
 path = f'sqlite:///{os.path.join(script_dir, "client.db")}'
+# Mysql似乎更慢
+# path = "mysql+pymysql://dc_video:e65tEC2sX2fNrFWF@localhost:3306/dc_video"
 engine = create_engine(path)
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -123,12 +127,9 @@ def create_config(k, v):
     session.commit()
     return new_config
 
-def get_config(k):
+def get_config(k: str):
     config = session.query(Config).filter_by(k=k).first()
-    print(f"{k} : {config.v}")
-    if config:
-        return config.v
-    return None
+    return config.v if config else None
 
 def update_config(k, v):
     config = session.query(Config).filter_by(k=k).first()
@@ -176,7 +177,25 @@ def clear_all_logs_and_frames():
     except Exception as e:
         session.rollback()
         print(f"An error occurred: {e}")
+# 初始化默认配置项
+DEFAULT_CONFIGS = {
+    "server_url": "ws://localhost:8000",
+    "protect_type": "face",
+    "compress": "100",
+    "grayscale": "1"
+}
 
+# 检查并初始化默认配置项
+def initialize_default_config():
+    for k, v in DEFAULT_CONFIGS.items():
+        config = session.query(Config).filter_by(k=k).first()
+        if not config:
+            # 如果配置项不存在，则插入默认值
+            new_config = Config(k=k, v=v)
+            session.add(new_config)
+    session.commit()
+
+initialize_default_config()
 # 调用函数清除所有log和frame的记录
 if __name__ == "__main__":
     clear_all_logs_and_frames()
