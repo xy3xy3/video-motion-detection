@@ -209,17 +209,15 @@ async def fake_process(frame: np.ndarray, log_id: int, original_frame: np.ndarra
 
 
 # 发送帧到远程websocket
-# 发送帧到远程websocket
 async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
     server_url = get_config("server_url").replace("http", "ws") + "/ws/predict"
     async with websockets.connect(server_url) as websocket:
-        # 编码帧为JPG格式，返回buffer（即二进制数据）
         _, buffer = cv2.imencode(".jpg", frame)
 
-        # 直接发送二进制数据而不是Base64编码后的数据
+        # 直接发送二进制数据而不是Base64编码
         await websocket.send(buffer.tobytes())
 
-        # 接收来自服务端的检测结果
+        # 接收来自服务器的检测结果
         data = await websocket.recv()
 
         # 处理返回的检测结果
@@ -227,23 +225,22 @@ async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarr
         image_with_detections = fun.draw_detections(original_frame, detection_result)
         _, buffer = cv2.imencode(".jpg", image_with_detections)
 
-        # 继续发送给客户端的WebSocket连接
-        img_str = base64.b64encode(buffer).decode()
-        create_frame(log_id, time=datetime.now(), data=detection_result, base64=img_str)
-        await send_image_to_client(img_str)
-
+        # 使用二进制发送到客户端
+        await send_image_to_client(buffer.tobytes())
 
 
 # 发送图片到客户端
-async def send_image_to_client(img_str: str):
+async def send_image_to_client(buffer: bytes):
     if len(websocket_clients) == 0:
         print("No clients connected")
         return
     for client in websocket_clients:
         try:
-            await client.send_text(img_str)
+            # 直接发送二进制数据
+            await client.send_bytes(buffer)
         except Exception as e:
             print(f"Failed to send image to client: {e}")
+
 
 
 @app.websocket("/ws/stream")

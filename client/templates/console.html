@@ -34,35 +34,58 @@
     let logId = null;
     let websocket = null;
     let frameCount = 0;
-    let lastTime = performance.now();  // 使用 performance.now() 提高时间精度
+    let lastTime = performance.now();
     const canvas = document.getElementById("video-canvas");
     const context = canvas.getContext("2d");
-    const img = new Image();  // 预定义图像对象
 
-    function drawImage(base64Image) {
-      img.src = "data:image/jpeg;base64," + base64Image;  // 设定图像来源
-    }
+    // 处理二进制图像数据
+    function drawBinaryImage(binaryData) {
+      const blob = new Blob([binaryData], { type: 'image/jpeg' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
 
-    img.onload = function () {
-      requestAnimationFrame(() => {  // 使用 requestAnimationFrame 保证流畅渲染
+      img.onload = function () {
         context.clearRect(0, 0, canvas.width, canvas.height); // 清空画布
         context.drawImage(img, 0, 0, canvas.width, canvas.height);  // 绘制图像
+        URL.revokeObjectURL(url); // 释放对象URL
         updateFrameRate();  // 更新帧率
-      });
-    };
+      };
+      img.src = url;
+    }
 
     function updateFrameRate() {
       frameCount++;
       const now = performance.now();
-      const deltaTime = (now - lastTime) / 1000; // 以秒为单位计算时间差
-      if (deltaTime >= 1) {  // 每秒更新一次帧率
+      const deltaTime = (now - lastTime) / 1000;
+      if (deltaTime >= 1) {
         const fps = frameCount / deltaTime;
-        $("#fps-value").text(fps.toFixed(2));  // 显示FPS
+        $("#fps-value").text(fps.toFixed(2));
         frameCount = 0;
         lastTime = now;
       }
     }
 
+    // 启动 WebSocket
+    function startWebSocket() {
+      websocket = new WebSocket("ws://" + window.location.host + "/ws/stream");
+
+      // 设置二进制类型为 arraybuffer
+      websocket.binaryType = "arraybuffer";
+
+      websocket.onmessage = function (event) {
+        // 处理二进制数据
+        drawBinaryImage(event.data);
+      };
+
+      websocket.onerror = function () {
+        $("#status").text("WebSocket connection error.");
+        websocket.close();
+      };
+
+      websocket.onclose = function () {
+        $("#status").text("WebSocket connection closed.");
+      };
+    }
     // 开始摄像头调用
     $("#start-camera-btn").click(function () {
       $.post("/start_processing", { input_type: "camera" }, function (data) {
@@ -116,22 +139,6 @@
       });
     }
 
-    // 启动 WebSocket
-    function startWebSocket() {
-      websocket = new WebSocket("ws://" + window.location.host + "/ws/stream");
-      websocket.onmessage = function (event) {
-        drawImage(event.data);  // 处理传入的帧
-      };
-
-      websocket.onerror = function () {
-        $("#status").text("WebSocket connection error.");
-        websocket.close();
-      };
-
-      websocket.onclose = function () {
-        $("#status").text("WebSocket connection closed.");
-      };
-    }
   });
 </script>
 {% endblock %}
