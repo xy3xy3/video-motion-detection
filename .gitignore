@@ -3,3 +3,6 @@
 
 # Ignore the Python cache directory
 __pycache__/
+
+*.mp4
+*.db
