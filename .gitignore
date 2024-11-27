@@ -16,3 +16,5 @@ pnpm-lock.yaml
 # 屏蔽 .vscode idea 文件夹
 .vscode/
 .idea/
+server/tempCodeRunnerFile.py
+server/runs/detect/predict3/image.jpg
