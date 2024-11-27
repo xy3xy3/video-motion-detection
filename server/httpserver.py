@@ -18,6 +18,7 @@ app = FastAPI()
 
 # 加载YOLO模型
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
+print(f"使用设备: {device}")
 # m 20.2ms n 15-25ms s 14-21ms
 model = YOLO("./models/yolo11n.pt")
 model.model.names=default_class_names("coco8.yaml")

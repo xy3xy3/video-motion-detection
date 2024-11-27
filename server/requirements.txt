@@ -1,9 +1,8 @@
 fastapi
-torch
-ultralytics
 Pillow
 numpy
 opencv-python
 websockets
 python-multipart
 uvicorn
+ultralytics

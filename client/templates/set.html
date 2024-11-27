@@ -59,6 +59,15 @@
         </div>
       </div>
       <div class="layui-form-item">
+        <label class="layui-form-label">是否记录数据库</label>
+        <div class="layui-input-block">
+          <select name="record_db" id="record_db-select" lay-filter="record_db">
+            <option value="0">否</option>
+            <option value="1">是</option>
+          </select>
+        </div>
+    </div>
+      <div class="layui-form-item">
         <div class="layui-input-block">
           <button type="button" class="layui-btn" id="save-button">保存</button>
         </div>
@@ -71,8 +80,10 @@
   layui.use(["form", "jquery"], function () {
     var form = layui.form;
     var $ = layui.jquery;
-    var grayscale = "{{ config.grayscale }}"; // 这里的 config.grayscale 应该替换为实际的值
+    var grayscale = "{{ config.grayscale }}";
     $("select[name='grayscale']").val(grayscale);
+    var record_db = "{{ config.record_db }}";
+    $("select[name='record_db']").val(record_db);
     form.render("select"); //刷新select选择框渲染
 
     $("#save-button").click(function () {
@@ -81,6 +92,7 @@
         protect_type: $("input[name='protect_type']").val(),
         compress: $("input[name='compress']").val(),
         grayscale: $("select[name='grayscale']").val(),
+        record_db: $("select[name='record_db']").val(),
       };
 
       $.ajax({

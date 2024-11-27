@@ -95,6 +95,7 @@ async def get_settings(request: Request):
         "protect_type": get_config("protect_type"),
         "compress": get_config("compress"),
         "grayscale": get_config("grayscale"),
+        "record_db": get_config("record_db"),
     }
     return templates.TemplateResponse(
         "set.html", {"request": request, "config": config}
@@ -108,10 +109,12 @@ async def update_settings(request: Request):
     protect_type = data.get("protect_type")
     compress = data.get("compress")
     grayscale = data.get("grayscale")
+    record_db = data.get("record_db")
     save_config("server_url", server_url)
     save_config("protect_type", protect_type)
     save_config("compress", str(compress))
     save_config("grayscale", str(grayscale))
+    save_config("record_db", str(record_db))
 
     return JSONResponse(content={"status": "success"})
 
@@ -258,14 +261,12 @@ async def send_image_to_client(buffer: bytes):
 
 # 后台任务：从队列中读取帧并写入数据库（在进程中运行）
 def process_frame_queue(frame_queue: Queue):
+    record_db = get_config("record_db")
     while True:
         try:
-            # 从队列中获取帧
             log_id, detection_result, frame_data = frame_queue.get()
-
-            # 异步写入数据库（可以根据需要调整为同步操作）
-            create_frame(log_id, time=datetime.now(), data=detection_result, base64=base64.b64encode(frame_data).decode())
-
+            if record_db == "1":
+                create_frame(log_id, time=datetime.now(), data=detection_result, base64=base64.b64encode(frame_data).decode())
         except Exception as e:
             print(f"Error processing frame: {e}")
 
@@ -292,9 +293,7 @@ async def websocket_endpoint(websocket: WebSocket, log_id: int):
         print("log推送 disconnect")
 
 
-
-
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)

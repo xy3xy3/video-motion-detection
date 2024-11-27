@@ -182,7 +182,8 @@ DEFAULT_CONFIGS = {
     "server_url": "ws://localhost:8000",
     "protect_type": "face",
     "compress": "100",
-    "grayscale": "1"
+    "grayscale": "1",
+    "record_db": "1"  # 新增配置项
 }
 
 # 检查并初始化默认配置项
