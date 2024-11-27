@@ -1,4 +1,5 @@
 import asyncio
+import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -15,20 +16,23 @@ from videos import router as videos_router
 from frames import router as frames_router
 import multiprocessing
 from multiprocessing import Queue, Process
+global_websocket = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global global_websocket
+    await establish_websocket()
     # 创建并启动一个新进程来处理队列
     process = Process(target=process_frame_queue, args=(frame_queue,))
     process.start()
-
     # 应用启动
     yield
-
     # 应用关闭，终止进程
     process.terminate()
     process.join()
+    if global_websocket and not global_websocket.closed:
+        await global_websocket.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -163,11 +167,12 @@ async def process_camera(log_id: int):
     protect_type = get_config("protect_type")
     grayscale = get_config("grayscale")
     cap = cv2.VideoCapture(0)
-    # 设置摄像头分辨率为720p
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
     frame_count = 0
+    target_fps = 30  # 设置目标帧率
     while is_processing and cap.isOpened():
+        start_time = time.time()
         ret, frame = cap.read()
         if not ret:
             break
@@ -178,11 +183,13 @@ async def process_camera(log_id: int):
         if grayscale:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         await send_frame_ws(frame, log_id, original_frame)
-        # await fake_process(frame, log_id, original_frame)
+        # 控制帧率
+        elapsed_time = time.time() - start_time
+        if elapsed_time < 1 / target_fps:
+            await asyncio.sleep(1 / target_fps - elapsed_time)
     cap.release()
     update_log(log_id, end_time=datetime.now())
     is_processing = False
-
 
 # 视频处理
 async def process_video(log_id: int, video_path: str):
@@ -222,30 +229,48 @@ async def fake_process(frame: np.ndarray, log_id: int, original_frame: np.ndarra
     await send_image_to_client(img_str)
 
 
-# 发送帧到远程websocket并放入队列
-async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
+async def establish_websocket():
+    global global_websocket
     server_url = get_config("server_url").replace("http", "ws") + "/ws/predict"
-    async with websockets.connect(server_url) as websocket:
-        _, buffer = cv2.imencode(".jpg", frame)
+    global_websocket = await websockets.connect(server_url)
 
-        # 直接发送二进制数据到服务器
-        await websocket.send(buffer.tobytes())
+# 在lifespan里启动WebSocket连接
+@app.on_event("startup")
+async def startup_event():
+    await establish_websocket()
 
-        # 接收服务器的检测结果
-        data = await websocket.recv()
+# 在send_frame_ws里使用global_websocket
+async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
+    global global_websocket
+    if global_websocket is None or global_websocket.closed:
+        await establish_websocket()
 
-        # 处理返回的检测结果
-        detection_result = json.loads(data)
-        image_with_detections = fun.draw_detections(original_frame, detection_result)
-        _, buffer = cv2.imencode(".jpg", image_with_detections)
+    start_time = time.time()  # 记录开始时间
+    _, buffer = cv2.imencode(".jpg", frame)
+    encode_time = time.time()  # 记录编码时间
+    await global_websocket.send(buffer.tobytes())
+    send_time = time.time()  # 记录发送时间
+    data = await global_websocket.recv()
+    recv_time = time.time()  # 记录接收时间
+    # 处理返回的检测结果
+    detection_result = json.loads(data)
+    image_with_detections = fun.draw_detections(original_frame, detection_result)
+    _, buffer = cv2.imencode(".jpg", image_with_detections)
+    draw_time = time.time()  # 记录绘制时间
+    # 将帧数据放入队列
+    frame_queue.put((log_id, detection_result, buffer.tobytes()))
+    queue_time = time.time()  # 记录放入队列时间
+    # 同时发送给前端用户
+    await send_image_to_client(buffer.tobytes())
+    client_send_time = time.time()  # 记录发送给前端时间
 
-        # 将帧数据放入队列
-        frame_queue.put((log_id, detection_result, buffer.tobytes()))
-
-        # 同时发送给前端用户
-        await send_image_to_client(buffer.tobytes())
-
-
+    print(f"Encode time: {encode_time - start_time:.4f}s")
+    print(f"Send time: {send_time - encode_time:.4f}s")
+    print(f"Receive time: {recv_time - send_time:.4f}s")
+    print(f"Draw time: {draw_time - recv_time:.4f}s")
+    print(f"Queue time: {queue_time - draw_time:.4f}s")
+    print(f"Client send time: {client_send_time - queue_time:.4f}s")
+    print(f"All time {client_send_time -start_time:.4f}s")
 
 # 发送图片到客户端
 async def send_image_to_client(buffer: bytes):
@@ -267,6 +292,8 @@ def process_frame_queue(frame_queue: Queue):
             log_id, detection_result, frame_data = frame_queue.get()
             if record_db == "1":
                 create_frame(log_id, time=datetime.now(), data=detection_result, base64=base64.b64encode(frame_data).decode())
+            else:
+                continue  # 跳过不必要的操作
         except Exception as e:
             print(f"Error processing frame: {e}")
 
