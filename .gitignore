@@ -3,6 +3,7 @@
 
 # Ignore the Python cache directory
 __pycache__/
+client/static/videos/
 videos/
 # Ignore database files
 *.db
