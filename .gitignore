@@ -4,5 +4,14 @@
 # Ignore the Python cache directory
 __pycache__/
 
-*.mp4
+# Ignore database files
 *.db
+目录.py
+
+# pnpm前端
+node_modules/
+pnpm-lock.yaml
+
+# 屏蔽 .vscode idea 文件夹
+.vscode/
+.idea/
