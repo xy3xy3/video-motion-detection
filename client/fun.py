@@ -1,8 +1,57 @@
+import io
 import os
 from typing import Dict, List
 import cv2
 import numpy as np
+import onnxruntime
+from runtime import detection
 from db import get_config
+from PIL import Image
+
+
+# 初始化 ONNX 模型
+model_path = "./model/FastestDet.onnx"  # 模型路径
+session = onnxruntime.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+# `['CUDAExecutionProvider', 'CPUExecutionProvider']`
+for root, dirs, files in os.walk("./client/restmp", topdown=False):
+    for name in files:
+        os.remove(os.path.join(root, name))
+    for name in dirs:
+        os.rmdir(os.path.join(root, name))
+    break
+
+def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
+    """
+    隐私保护函数，利用 ONNX 模型检测并模糊人脸、车牌区域。
+    """
+    list_type = protect_type.split(",")
+    input_width, input_height = 352, 352  # 模型输入大小
+    thresh = 0.65  # 检测阈值
+
+    # 使用 ONNX 模型检测
+    detections = detection(session, image, input_width, input_height, thresh)
+
+    # 检查检测结果是否有效
+    if not detections or detections == [None]:
+        return image  # 如果检测为空或无效，直接返回原图
+
+    for det in detections:
+        if det is None or len(det) != 6:  # 跳过无效的检测结果
+            continue
+
+        # 强制将坐标值转换为整数
+        x1, y1, x2, y2 = map(int, det[:4])
+        score, cls_index = det[4], det[5]
+
+        # 检查类别是否需要保护
+        if cls_index == 0 and "face" in list_type:  # 0 是人脸
+            if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
+                image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
+        elif cls_index == 1 and "plate" in list_type:  # 1 是车牌
+            if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
+                image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
+
+    return image
 
 face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
@@ -21,7 +70,7 @@ for root, dirs, files in os.walk("./client/restmp", topdown=False):
         os.rmdir(os.path.join(root, name))
     break
 
-def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
+def privacy_protect_old(image: np.ndarray, protect_type: str) -> np.ndarray:
     list_type = protect_type.split(",")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     if "face" in list_type:
@@ -68,3 +117,26 @@ def compress_jpg(image: np.ndarray, rate: int = 90) -> np.ndarray:
         return image
     _, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), rate])
     return cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+
+
+def compress_jpg_pil(image: np.ndarray, rate: int = 90) -> np.ndarray:
+    if rate == 100:
+        return image
+    # 将 numpy 数组转换为 PIL 图像
+    pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # 压缩图像
+    buffer = io.BytesIO()
+    pil_image.save(buffer, format="JPEG", quality=rate)
+    buffer.seek(0)
+    # 将压缩后的图像转换回 numpy 数组
+    compressed_image = np.array(Image.open(buffer))
+    return cv2.cvtColor(compressed_image, cv2.COLOR_RGB2BGR)
+if __name__ == "__main__":
+    # 读取图片
+    img = cv2.imread("./test.png")
+    # 模型输入的宽高
+    input_width, input_height = 352, 352
+    # 测试隐私保护
+    img = privacy_protect(img,"face,plate")
+    # 显示图片
+    cv2.imwrite("./result.jpg", img)
