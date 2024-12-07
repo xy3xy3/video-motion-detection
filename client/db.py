@@ -183,7 +183,8 @@ DEFAULT_CONFIGS = {
     "protect_type": "face",
     "compress": "100",
     "grayscale": "1",
-    "record_db": "1"  # 新增配置项
+    "record_db": "1",
+    "show_protect": "0",
 }
 
 # 检查并初始化默认配置项

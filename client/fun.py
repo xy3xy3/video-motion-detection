@@ -26,13 +26,14 @@ def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
     """
     list_type = protect_type.split(",")
     input_width, input_height = 352, 352  # 模型输入大小
-    thresh = 0.65  # 检测阈值
+    thresh = 0.4  # 检测阈值
 
     # 使用 ONNX 模型检测
     detections = detection(session, image, input_width, input_height, thresh)
 
     # 检查检测结果是否有效
     if not detections or detections == [None]:
+        print("无识别结果")
         return image  # 如果检测为空或无效，直接返回原图
 
     for det in detections:
@@ -42,7 +43,7 @@ def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
         # 强制将坐标值转换为整数
         x1, y1, x2, y2 = map(int, det[:4])
         score, cls_index = det[4], det[5]
-
+        print(f"识别结果: {score}, {cls_index}")
         # 检查类别是否需要保护
         if cls_index == 0 and "face" in list_type:  # 0 是人脸
             if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
@@ -133,7 +134,7 @@ def compress_jpg_pil(image: np.ndarray, rate: int = 90) -> np.ndarray:
     return cv2.cvtColor(compressed_image, cv2.COLOR_RGB2BGR)
 if __name__ == "__main__":
     # 读取图片
-    img = cv2.imread("./test.png")
+    img = cv2.imread("./image.png")
     # 模型输入的宽高
     input_width, input_height = 352, 352
     # 测试隐私保护

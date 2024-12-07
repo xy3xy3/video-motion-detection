@@ -99,6 +99,7 @@ async def get_settings(request: Request):
         "compress": get_config("compress"),
         "grayscale": get_config("grayscale"),
         "record_db": get_config("record_db"),
+        "show_protect": get_config("show_protect"),
     }
     return templates.TemplateResponse(
         "set.html", {"request": request, "config": config}
@@ -113,11 +114,13 @@ async def update_settings(request: Request):
     compress = data.get("compress")
     grayscale = data.get("grayscale")
     record_db = data.get("record_db")
+    show_protect = data.get("show_protect")
     save_config("server_url", server_url)
     save_config("protect_type", protect_type)
     save_config("compress", str(compress))
     save_config("grayscale", str(grayscale))
     save_config("record_db", str(record_db))
+    save_config("show_protect", str(show_protect))
 
     return JSONResponse(content={"status": "success"})
 
@@ -166,7 +169,8 @@ async def process_camera(log_id: int):
     global is_processing
     rate = int(get_config("compress"))
     protect_type = get_config("protect_type")
-    grayscale = get_config("grayscale")
+    grayscale = bool(get_config("grayscale")=="1")
+    show_protect = bool(get_config("show_protect")=="1")
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -180,10 +184,12 @@ async def process_camera(log_id: int):
         frame_count += 1
         original_frame = frame.copy()
         frame = fun.privacy_protect(frame, protect_type)
+        if show_protect:
+            original_frame = frame
         frame = fun.compress_jpg(frame, rate)
         if grayscale:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        await send_frame_ws(frame, log_id, original_frame)
+        await send_frame_ws(frame, log_id, original_frame, 1)
         # 控制帧率
         elapsed_time = time.time() - start_time
         if elapsed_time < 1 / target_fps:
@@ -193,40 +199,51 @@ async def process_camera(log_id: int):
     is_processing = False
 
 # 视频处理
-
-
 async def process_video(log_id: int, video_path: str):
-    global is_processing
+    global is_processing,websocket_clients
     rate = int(get_config("compress"))
     protect_type = get_config("protect_type")
-    grayscale = get_config("grayscale")
+    grayscale = bool(get_config("grayscale")=="1")
+    show_protect = bool(get_config("show_protect")=="1")
     video_path = "./static/videos/" + video_path
     cap = cv2.VideoCapture(video_path)
     frame_count = 0
     while is_processing and cap.isOpened():
         print("="*50)
+        #死循环,等待客户端链接建立
+        while is_processing and len(websocket_clients) == 0:
+            print("waiting for client")
+            await asyncio.sleep(1)
+            if not is_processing:
+                break
+        if not is_processing:
+            break
         start_time = time.time()
         ret, frame = cap.read()
         if not ret:
             break
         frame_count += 1
         original_frame = frame.copy()
-        frame = fun.adjust_resolution(frame)
         frame = fun.privacy_protect(frame, protect_type)
+        if show_protect:
+            original_frame = frame
         protect_time = time.time()
         print(f"protect_time {(protect_time - start_time) * 1000:.4f}ms")
         if rate < 100:
+            print("压缩图片")
             frame = fun.compress_jpg(frame, rate)
         compress_time = time.time()
         print(f"compress_time rate{rate} {(compress_time - protect_time) * 1000:.4f}ms")
         if grayscale:
+            print("转为灰度")
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         process_time = time.time()
         print(f"frame process time {(process_time - start_time) * 1000:.4f}ms")
-        await send_frame_ws(frame, log_id, original_frame)#original_frame
+        res = await send_frame_ws(frame, log_id, original_frame,0)
         end_time = time.time()
-        print(f"signgle frame time {(end_time - start_time) * 1000:.4f}ms")
-        # await fake_process(frame, log_id, original_frame)
+        print(f"signgle frame time {(end_time - start_time) * 1000:.4f}ms res:{res}")
+        if not res:
+            break
     cap.release()
     update_log(log_id, end_time=datetime.now())
     is_processing = False
@@ -251,54 +268,56 @@ async def establish_websocket():
 
 
 # 在send_frame_ws里使用global_websocket
-
-async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray):
+async def send_frame_ws(frame: np.ndarray, log_id: int, original_frame: np.ndarray,send=True):
     global global_websocket
     if global_websocket is None or global_websocket.closed:
         await establish_websocket()
 
     start_time = time.time()  # 记录开始时间
     _, buffer = cv2.imencode(".jpg", frame)
-    encode_time = time.time()  # 记录编码时间
-    await global_websocket.send(buffer.tobytes())
-    send_time = time.time()  # 记录发送时间
-    data = await global_websocket.recv()
-    recv_time = time.time()  # 记录接收时间
-    # 处理返回的检测结果
-    detection_result = json.loads(data)
-    image_with_detections = fun.draw_detections(
-        original_frame, detection_result)
-    _, buffer = cv2.imencode(".jpg", image_with_detections)
-    draw_time = time.time()  # 记录绘制时间
-    # 将帧数据放入队列
-    frame_queue.put((log_id, detection_result, buffer.tobytes()))
-    queue_time = time.time()  # 记录放入队列时间
+    if send:
+        encode_time = time.time()  # 记录编码时间
+        await global_websocket.send(buffer.tobytes())
+        send_time = time.time()  # 记录发送时间
+        data = await global_websocket.recv()
+        recv_time = time.time()  # 记录接收时间
+        # 处理返回的检测结果
+        detection_result = json.loads(data)
+        image_with_detections = fun.draw_detections(
+            original_frame, detection_result)
+        _, buffer = cv2.imencode(".jpg", image_with_detections)
+        draw_time = time.time()  # 记录绘制时间
+        # 将帧数据放入队列
+        frame_queue.put((log_id, detection_result, buffer.tobytes()))
+        queue_time = time.time()  # 记录放入队列时间
+    else:
+        await asyncio.sleep(0.01)
     # 同时发送给前端用户
-    await send_image_to_client(buffer.tobytes())
+    res = await send_image_to_client(buffer.tobytes())
     client_send_time = time.time()  # 记录发送给前端时间
 
-    print(f"Encode time: {(encode_time - start_time) * 1000:.4f}ms")
-    print(f"Send time: {(send_time - encode_time) * 1000:.4f}ms")
-    print(f"Receive time: {(recv_time - send_time) * 1000:.4f}ms")
-    print(f"Draw time: {(draw_time - recv_time) * 1000:.4f}ms")
-    print(f"Queue time: {(queue_time - draw_time) * 1000:.4f}ms")
-    print(f"Client send time: {(client_send_time - queue_time) * 1000:.4f}ms")
+    # print(f"Encode time: {(encode_time - start_time) * 1000:.4f}ms")
+    # print(f"Send time: {(send_time - encode_time) * 1000:.4f}ms")
+    # print(f"Receive time: {(recv_time - send_time) * 1000:.4f}ms")
+    # print(f"Draw time: {(draw_time - recv_time) * 1000:.4f}ms")
+    # print(f"Queue time: {(queue_time - draw_time) * 1000:.4f}ms")
+    # print(f"Client send time: {(client_send_time - queue_time) * 1000:.4f}ms")
     print(f"send_frame_ws time {(client_send_time - start_time) * 1000:.4f}ms")
+    return res
 
 # 发送图片到客户端
-
-
 async def send_image_to_client(buffer: bytes):
     if len(websocket_clients) == 0:
         print("No clients connected")
-        return
+        return False
     for client in websocket_clients:
         try:
             # 直接发送二进制数据
             await client.send_bytes(buffer)
         except Exception as e:
             print(f"Failed to send image to client: {e}")
-
+            return False
+    return True
 # 后台任务：从队列中读取帧并写入数据库（在进程中运行）
 
 
@@ -319,11 +338,13 @@ def process_frame_queue(frame_queue: Queue):
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    print("加入新链接")
     websocket_clients.append(websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
+        print("客户端断开连接")
         websocket_clients.remove(websocket)
 
 

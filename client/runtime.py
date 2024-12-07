@@ -126,7 +126,7 @@ def detection(session, img, input_width, input_height, thresh):
 
 if __name__ == "__main__":
     # 读取图片
-    img = cv2.imread("./test.jpg")
+    img = cv2.imread("./image.png")
     # 模型输入的宽高
     input_width, input_height = 352, 352
     # 加载模型，provider参数是指定用CPU还是GPU推理，在onnxruntime某版本后必填
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     )
     # 目标检测
     start = time.perf_counter()
-    bboxes = detection(session, img, input_width, input_height, 0.65)
+    bboxes = detection(session, img, input_width, input_height, 0.5)
     end = time.perf_counter()
     time = (end - start) * 1000.0
     print("forward time:%fms" % time)
@@ -152,6 +152,8 @@ if __name__ == "__main__":
         for b in bboxes:
             print(b)
             obj_score, cls_index = b[4], int(b[5])
+            if cls_index > len(names):
+                continue
             x1, y1, x2, y2 = int(b[0]), int(b[1]), int(b[2]), int(b[3])
 
             # 防止推理要绘制的内容带numpy的只读属性，复制一份（会整型丢失精度）

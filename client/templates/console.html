@@ -3,6 +3,11 @@
     <div class="layui-card-header">控制台</div>
     <div class="layui-card-body" pad15="">
       <div class="button-container">
+        <select id="resolution-select" class="layui-select">
+          <option value="1920x1080">1080p</option>
+          <option value="1280x720">720p</option>
+          <option value="720x480">480p</option>
+        </select>
         <button class="layui-btn" id="start-camera-btn">摄像头调用</button>
         <button class="layui-btn" id="start-video-btn">视频调用</button>
         <input type="text" id="video-path" placeholder="Enter video path" class="layui-input" value="test.mp4" style="flex-grow: 1" />
@@ -13,7 +18,7 @@
         FPS: <span id="fps-value">0</span>
       </div>
       <div class="canvas-container">
-        <canvas id="video-canvas" width="640" height="480"></canvas>
+        <canvas id="video-canvas" width="720" height="480"></canvas>
       </div>
     </div>
   </div>
@@ -27,24 +32,33 @@
       const canvas = document.getElementById('video-canvas')
       const context = canvas.getContext('2d')
       const img = new Image() // 复用一个 img 对象
+      let selectedResolution = '720x480' // 默认选择480p
 
+      // 监听分辨率选择变化
+      $('#resolution-select').on('change', function () {
+        selectedResolution = $(this).val()
+        var dims = selectedResolution.split('x')
+        console.log(dims)
+        canvas.width = dims[0]
+        canvas.height = dims[1]
+      })
       // 处理二进制图像数据
       function drawBinaryImage(binaryData) {
-        const start_time = performance.now();
-        const blob = new Blob([binaryData], { type: 'image/jpeg' });
+        const start_time = performance.now()
+        const blob = new Blob([binaryData], { type: 'image/jpeg' })
 
-        createImageBitmap(blob).then(bitmap => {
-          const load_time = performance.now();
-          context.clearRect(0, 0, canvas.width, canvas.height);
-          context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          const draw_time = performance.now();
-          updateFrameRate();
-          const update_time = performance.now();
-          console.log(`Load time: ${(load_time - start_time).toFixed(4)}ms`);
-          console.log(`Draw time: ${(draw_time - load_time).toFixed(4)}ms`);
-          console.log(`Update time: ${(update_time - draw_time).toFixed(4)}ms`);
-          console.log(`Total time: ${(update_time - start_time).toFixed(4)}ms`);
-        });
+        createImageBitmap(blob).then((bitmap) => {
+          const load_time = performance.now()
+          context.clearRect(0, 0, canvas.width, canvas.height)
+          context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+          const draw_time = performance.now()
+          updateFrameRate()
+          const update_time = performance.now()
+          console.log(`Load time: ${(load_time - start_time).toFixed(4)}ms`)
+          console.log(`Draw time: ${(draw_time - load_time).toFixed(4)}ms`)
+          console.log(`Update time: ${(update_time - draw_time).toFixed(4)}ms`)
+          console.log(`Total time: ${(update_time - start_time).toFixed(4)}ms`)
+        })
       }
 
       function updateFrameRate() {
@@ -65,29 +79,37 @@
         // 设置二进制类型为 arraybuffer
         websocket.binaryType = 'arraybuffer'
 
+        // 连接成功时的处理函数
+        websocket.onopen = function (event) {
+          console.log('WebSocket connection opened.')
+        }
+
         websocket.onmessage = function (event) {
           // 处理二进制数据
+          console.log('Received message:', event.data)
           drawBinaryImage(event.data)
         }
 
-        websocket.onerror = function () {
+        websocket.onerror = function (error) {
+          console.error('WebSocket connection error:', error)
           $('#status').text('WebSocket connection error.')
           websocket.close()
         }
 
-        websocket.onclose = function () {
+        websocket.onclose = function (event) {
+          console.log('WebSocket connection closed.', event)
           $('#status').text('WebSocket connection closed.')
         }
       }
       // 开始摄像头调用
       $('#start-camera-btn').click(function () {
+        startWebSocket() // 启动 WebSocket 连接
         $.post('/start_processing', { input_type: 'camera' }, function (data) {
           $('#status').text('Processing started with log ID: ' + data.log_id)
           logId = data.log_id
           $('#stop-btn').show()
           $('#start-camera-btn').hide()
           $('#start-video-btn').hide()
-          startWebSocket() // 启动 WebSocket 连接
         }).fail(function () {
           layer.msg('Error starting processing.')
           $('#status').text('Error starting processing.')
@@ -96,6 +118,7 @@
 
       // 开始视频调用
       $('#start-video-btn').click(function () {
+        startWebSocket() // 启动 WebSocket 连接
         const videoPath = $('#video-path').val()
         $.post('/start_processing', { input_type: 'video', video_path: videoPath }, function (data) {
           $('#status').text('Processing started with log ID: ' + data.log_id)
@@ -103,7 +126,6 @@
           $('#stop-btn').show()
           $('#start-camera-btn').hide()
           $('#start-video-btn').hide()
-          startWebSocket() // 启动 WebSocket 连接
         }).fail(function () {
           $('#status').text('Error starting processing.')
         })
@@ -115,14 +137,14 @@
       })
 
       function stopProcessing() {
+        if (websocket) {
+          websocket.close() // 关闭 WebSocket 连接
+        }
         $.post('/stop_processing', function () {
           $('#status').text('Processing stopped.')
           $('#stop-btn').hide()
           $('#start-camera-btn').show()
           $('#start-video-btn').show()
-          if (websocket) {
-            websocket.close() // 关闭 WebSocket 连接
-          }
         }).fail(function () {
           $('#status').text('Error stopping processing.')
         })

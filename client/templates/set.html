@@ -1,113 +1,98 @@
-{% extends "base.html" %} {% block content %}
-<div class="layui-card">
-  <div class="layui-card-header">设置</div>
-  <div class="layui-card-body" pad15="">
-    <form class="layui-form" id="settings-form">
-      <div class="layui-form-item">
-        <label class="layui-form-label">服务端url</label>
-        <div class="layui-input-block">
-          <input
-            type="text"
-            name="server_url"
-            required
-            lay-verify="required"
-            placeholder="请输入服务器URL"
-            autocomplete="off"
-            class="layui-input"
-            value="{{ config.server_url }}"
-          />
+{% extends 'base.html' %} {% block content %}
+  <div class="layui-card">
+    <div class="layui-card-header">设置</div>
+    <div class="layui-card-body" pad15="">
+      <form class="layui-form" id="settings-form">
+        <div class="layui-form-item">
+          <label class="layui-form-label">服务端url</label>
+          <div class="layui-input-block">
+            <input type="text" name="server_url" required lay-verify="required" placeholder="请输入服务器URL" autocomplete="off" class="layui-input" value="{{ config.server_url }}" />
+          </div>
         </div>
-      </div>
-      <div class="layui-form-item">
-        <label class="layui-form-label">保护类型</label>
-        <div class="layui-input-block">
-          <input
-            type="text"
-            name="protect_type"
-            required
-            lay-verify="required"
-            placeholder="请输入保护类型"
-            autocomplete="off"
-            class="layui-input"
-            value="{{ config.protect_type }}"
-          />
+        <div class="layui-form-item">
+          <label class="layui-form-label">保护类型</label>
+          <div class="layui-input-block">
+            <input type="text" name="protect_type" required lay-verify="required" placeholder="请输入保护类型" autocomplete="off" class="layui-input" value="{{ config.protect_type }}" />
+          </div>
+          <pre>目前支持face,plate；多个用,分隔</pre>
         </div>
-        <pre>目前支持face,plate；多个用,分隔</pre>
-      </div>
-      <div class="layui-form-item">
-        <label class="layui-form-label">是否转为灰度图像</label>
-        <div class="layui-input-block">
-          <select name="grayscale" id="grayscale-select" lay-filter="grayscale">
-            <option value="0">否</option>
-            <option value="1">是</option>
-          </select>
+        <div class="layui-form-item">
+          <label class="layui-form-label">是否转为灰度图像</label>
+          <div class="layui-input-block">
+            <select name="grayscale" id="grayscale-select" lay-filter="grayscale">
+              <option value="0">否</option>
+              <option value="1">是</option>
+            </select>
+          </div>
         </div>
-      </div>
-      <div class="layui-form-item">
-        <label class="layui-form-label">压缩率(1-100)</label>
-        <div class="layui-input-block">
-          <input
-            type="number"
-            name="compress"
-            required
-            lay-verify="required"
-            placeholder="请输入压缩率"
-            autocomplete="off"
-            class="layui-input"
-            value="{{ config.compress }}"
-          />
+        <div class="layui-form-item">
+          <label class="layui-form-label">压缩率(1-100)</label>
+          <div class="layui-input-block">
+            <input type="number" name="compress" required lay-verify="required" placeholder="请输入压缩率" autocomplete="off" class="layui-input" value="{{ config.compress }}" />
+          </div>
         </div>
-      </div>
-      <div class="layui-form-item">
-        <label class="layui-form-label">是否记录数据库</label>
-        <div class="layui-input-block">
-          <select name="record_db" id="record_db-select" lay-filter="record_db">
-            <option value="0">否</option>
-            <option value="1">是</option>
-          </select>
+        <div class="layui-form-item">
+          <label class="layui-form-label">是否记录数据库</label>
+          <div class="layui-input-block">
+            <select name="record_db" id="record_db-select" lay-filter="record_db">
+              <option value="0">否</option>
+              <option value="1">是</option>
+            </select>
+          </div>
         </div>
+        <div class="layui-form-item">
+          <label class="layui-form-label">是否显示隐私保护后结果</label>
+          <div class="layui-input-block">
+            <select name="show_protect" id="show_protect-select" lay-filter="show_protect">
+              <option value="0">否</option>
+              <option value="1">是</option>
+            </select>
+          </div>
+        </div>
+        <div class="layui-form-item">
+          <div class="layui-input-block">
+            <button type="button" class="layui-btn" id="save-button">保存</button>
+          </div>
+        </div>
+      </form>
     </div>
-      <div class="layui-form-item">
-        <div class="layui-input-block">
-          <button type="button" class="layui-btn" id="save-button">保存</button>
-        </div>
-      </div>
-    </form>
   </div>
-</div>
 {% endblock %} {% block js %}
-<script>
-  layui.use(["form", "jquery"], function () {
-    var form = layui.form;
-    var $ = layui.jquery;
-    var grayscale = "{{ config.grayscale }}";
-    $("select[name='grayscale']").val(grayscale);
-    var record_db = "{{ config.record_db }}";
-    $("select[name='record_db']").val(record_db);
-    form.render("select"); //刷新select选择框渲染
+  <script>
+    layui.use(['form', 'jquery'], function () {
+      var form = layui.form
+      var $ = layui.jquery
+      var grayscale = '{{ config.grayscale }}'
+      $("select[name='grayscale']").val(grayscale)
+      var record_db = '{{ config.record_db }}'
+      $("select[name='record_db']").val(record_db)
+      var show_protect = '{{ config.show_protect }}'
+      $("select[name='show_protect']").val(show_protect)
+      form.render('select')
 
-    $("#save-button").click(function () {
-      const formData = {
-        server_url: $("input[name='server_url']").val(),
-        protect_type: $("input[name='protect_type']").val(),
-        compress: $("input[name='compress']").val(),
-        grayscale: $("select[name='grayscale']").val(),
-        record_db: $("select[name='record_db']").val(),
-      };
+      $('#save-button').click(function () {
+        const formData = {
+          server_url: $("input[name='server_url']").val(),
+          protect_type: $("input[name='protect_type']").val(),
+          compress: $("input[name='compress']").val(),
+          grayscale: $("select[name='grayscale']").val(),
+          record_db: $("select[name='record_db']").val(),
+          show_protect: $("select[name='show_protect']").val()
+        }
 
-      $.ajax({
-        url: "/set",
-        type: "POST",
-        data: JSON.stringify(formData),
-        contentType: "application/json; charset=utf-8",
-        success: function (response) {
-          layer.msg("设置已保存");
-        },
-        error: function (error) {
-          layer.msg("保存设置时出错");
-        },
-      });
-    });
-  });
-</script>
+        $.ajax({
+          url: '/set',
+          type: 'POST',
+          data: JSON.stringify(formData),
+          contentType: 'application/json; charset=utf-8',
+          success: function (response) {
+            layer.msg('设置已保存')
+          },
+          error: function (error) {
+            layer.msg('保存设置时出错')
+          }
+        })
+      })
+    })
+  </script>
 {% endblock %}
