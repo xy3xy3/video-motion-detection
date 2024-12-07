@@ -2,6 +2,7 @@ from ultralytics import YOLO
 
 import torch
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
+
 print(f"使用设备: {device}")
 # 加载预训练的YOLOv11n模型
 model = YOLO(r"./models/yolo11n.pt")

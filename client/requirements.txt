@@ -11,3 +11,4 @@ pymysql
 cryptography
 onnxruntime==1.20.1
 pillow==11.0.0
+ultralytics
