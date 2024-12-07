@@ -26,7 +26,7 @@ def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
     """
     list_type = protect_type.split(",")
     input_width, input_height = 352, 352  # 模型输入大小
-    thresh = 0.4  # 检测阈值
+    thresh = 0.5  # 检测阈值
 
     # 使用 ONNX 模型检测
     detections = detection(session, image, input_width, input_height, thresh)
@@ -134,7 +134,7 @@ def compress_jpg_pil(image: np.ndarray, rate: int = 90) -> np.ndarray:
     return cv2.cvtColor(compressed_image, cv2.COLOR_RGB2BGR)
 if __name__ == "__main__":
     # 读取图片
-    img = cv2.imread("./image.png")
+    img = cv2.imread("./static/testimg/image3.png")
     # 模型输入的宽高
     input_width, input_height = 352, 352
     # 测试隐私保护

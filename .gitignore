@@ -5,6 +5,7 @@
 __pycache__/
 client/static/videos/
 videos/
+testimg/
 # Ignore database files
 *.db
 目录.py
