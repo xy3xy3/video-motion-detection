@@ -239,7 +239,7 @@ async def process_video(log_id: int, video_path: str):
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         process_time = time.time()
         print(f"frame process time {(process_time - start_time) * 1000:.4f}ms")
-        res = await send_frame_ws(frame, log_id, original_frame,1)
+        res = await send_frame_ws(frame, log_id, original_frame,0)
         end_time = time.time()
         print(f"signgle frame time {(end_time - start_time) * 1000:.4f}ms res:{res}")
         if not res:

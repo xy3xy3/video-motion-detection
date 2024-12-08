@@ -7,6 +7,7 @@ import onnxruntime
 from runtime import detection
 from db import get_config
 from PIL import Image
+from ultralytics import YOLO
 
 
 # 初始化 ONNX 模型
@@ -19,8 +20,33 @@ for root, dirs, files in os.walk("./client/restmp", topdown=False):
     for name in dirs:
         os.rmdir(os.path.join(root, name))
     break
+def privacy_protect_yolo(image: np.ndarray, protect_type: str) -> np.ndarray:
+    """
+    隐私保护函数，利用 YOLO 模型检测并模糊人脸、车牌区域。
+    """
+    list_type = protect_type.split(",")
+    onnx_model = YOLO("./model/best.onnx", task="detect")
+    results = onnx_model(image, save=False, show=False)
+    for result in results:
+        boxes = result.boxes
+        for box in boxes:
+            x1, y1, x2, y2 = box.xyxy[0]  # Get the bounding box coordinates in xyxy format
+            score = box.conf.item()       # Get the confidence score
+            cls_index = box.cls.item()          # Get the class label
+            # 将张量转换为整数
+            x1, y1, x2, y2 = int(x1.item()), int(y1.item()), int(x2.item()), int(y2.item())
+            print(f"识别结果: {score}, {cls_index}")
+            if cls_index == 0 and "face" in list_type:  # 0 是人脸
+                if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
+                    image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
+            elif cls_index == 1 and "plate" in list_type:  # 1 是车牌
+                if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
+                    image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
 
+    return image
 def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
+    return privacy_protect_yolo(image, protect_type)
+def privacy_protect_det(image: np.ndarray, protect_type: str) -> np.ndarray:
     """
     隐私保护函数，利用 ONNX 模型检测并模糊人脸、车牌区域。
     """
@@ -71,7 +97,7 @@ for root, dirs, files in os.walk("./client/restmp", topdown=False):
         os.rmdir(os.path.join(root, name))
     break
 
-def privacy_protect_old(image: np.ndarray, protect_type: str) -> np.ndarray:
+def privacy_protect_opencv(image: np.ndarray, protect_type: str) -> np.ndarray:
     list_type = protect_type.split(",")
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     if "face" in list_type:

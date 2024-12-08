@@ -12,7 +12,7 @@ with open("./models/coco.names", "r") as f:
 for i,name in enumerate(names):
     CLASS_NAMES = {i: name for i, name in enumerate(names)}
 # 加载ONNX模型
-onnx_model_path = './models/yolo11n.onnx'
+onnx_model_path = './models/best.onnx'
 session = ort.InferenceSession(onnx_model_path, providers=['CPUExecutionProvider'])
 
 # 获取模型输入和输出信息
@@ -105,9 +105,10 @@ def main():
     draw = ImageDraw.Draw(image_draw)
     for box, score, cls in zip(boxes, scores, classes):
         x0, y0, x1, y1 = box
-        label = f"{CLASS_NAMES[cls]}: {score:.2f}"
+        if cls in CLASS_NAMES:
+            label = f"{CLASS_NAMES[cls]}: {score:.2f}"
+            draw.text((x0, y0 - 15), label, fill='red')
         draw.rectangle([x0, y0, x1, y1], outline='red', width=3)
-        draw.text((x0, y0 - 15), label, fill='red')
 
     # 保存结果图像
     image_draw.save('det_result_picture.jpg')
