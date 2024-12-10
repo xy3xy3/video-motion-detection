@@ -1,3 +1,4 @@
+import datetime
 import io
 import os
 from typing import Dict, List
@@ -14,6 +15,9 @@ from ultralytics import YOLO
 model_path = "./model/FastestDet.onnx"  # 模型路径
 session = onnxruntime.InferenceSession(model_path, providers=["CPUExecutionProvider"])
 # `['CUDAExecutionProvider', 'CPUExecutionProvider']`
+yolo_onnx_model = YOLO("./model/best.onnx", task="detect")
+yolo_gpu_model = YOLO("./model/best.pt", task="detect")
+
 for root, dirs, files in os.walk("./client/restmp", topdown=False):
     for name in files:
         os.remove(os.path.join(root, name))
@@ -25,8 +29,7 @@ def privacy_protect_yolo(image: np.ndarray, protect_type: str) -> np.ndarray:
     隐私保护函数，利用 YOLO 模型检测并模糊人脸、车牌区域。
     """
     list_type = protect_type.split(",")
-    onnx_model = YOLO("./model/best.onnx", task="detect")
-    results = onnx_model(image, save=False, show=False)
+    results = yolo_onnx_model(image, save=False, show=False)
     for result in results:
         boxes = result.boxes
         for box in boxes:
@@ -42,10 +45,31 @@ def privacy_protect_yolo(image: np.ndarray, protect_type: str) -> np.ndarray:
             elif cls_index == 1 and "plate" in list_type:  # 1 是车牌
                 if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
                     image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
-
+    return image
+def privacy_protect_yolo_gpu(image: np.ndarray, protect_type: str) -> np.ndarray:
+    """
+    隐私保护函数，利用 YOLO 模型检测并模糊人脸、车牌区域。
+    """
+    list_type = protect_type.split(",")
+    results = yolo_gpu_model.predict(image)
+    for result in results:
+        boxes = result.boxes
+        for box in boxes:
+            x1, y1, x2, y2 = box.xyxy[0]  # Get the bounding box coordinates in xyxy format
+            score = box.conf.item()       # Get the confidence score
+            cls_index = box.cls.item()          # Get the class label
+            # 将张量转换为整数
+            x1, y1, x2, y2 = int(x1.item()), int(y1.item()), int(x2.item()), int(y2.item())
+            print(f"识别结果: {score}, {cls_index}")
+            if cls_index == 0 and "face" in list_type:  # 0 是人脸
+                if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
+                    image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
+            elif cls_index == 1 and "plate" in list_type:  # 1 是车牌
+                if y1 < y2 and x1 < x2 and y1 >= 0 and x1 >= 0 and y2 <= image.shape[0] and x2 <= image.shape[1]:
+                    image[y1:y2, x1:x2] = cv2.blur(image[y1:y2, x1:x2], (30, 30))
     return image
 def privacy_protect(image: np.ndarray, protect_type: str) -> np.ndarray:
-    return privacy_protect_yolo(image, protect_type)
+    return privacy_protect_yolo_gpu(image, protect_type)
 def privacy_protect_det(image: np.ndarray, protect_type: str) -> np.ndarray:
     """
     隐私保护函数，利用 ONNX 模型检测并模糊人脸、车牌区域。
